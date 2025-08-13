@@ -1,0 +1,19 @@
+.image-bulk-preview{
+	border: 1px solid #ddd; 
+	padding: 10px; 
+	border-style: dashed; 
+	margin-bottom: 5px;
+}
+
+.image-bulk-preview-image{
+	background-repeat: no-repeat; 
+	background-size: contain; 
+	background-position: center;
+	height: 100px; 
+	width: 120px; 
+	background-color: #fafafa; 
+	border: 1px solid #ddd;
+}
+.image-bulk-preview-remove-cont{
+	color: #B4352D;
+}

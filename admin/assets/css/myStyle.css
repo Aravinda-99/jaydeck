@@ -1,0 +1,53 @@
+.dropdown-menu{
+	/*position: relative !important;*/
+}
+
+.btnAddNew{
+	float: right;
+	margin-top: -58px;
+}
+
+.navbar{
+	background: #F44336;
+}
+.navbar a{
+	color: #fff;
+}
+.sweet-alert {
+	z-index: 2000 !important;
+}
+
+.form-horizontal .form-group {
+	margin-right: 0px !important;
+	margin-left: 0px !important;
+}
+.listPadL0 .btn{
+	padding-left: 0 !important;
+}
+
+.blink
+{
+	/* Start the shake animation and make the animation last for 0.5 seconds */
+	animation: shake 2s;
+	/* When the animation is finished, start again */
+	animation-iteration-count: infinite;
+}
+
+.blink:hover
+{
+	-webkit-animation: 0;
+}
+
+@keyframes shake {
+	0% { transform: translate(1px, 1px) rotate(0deg); }
+	10% { transform: translate(-1px, -2px) rotate(-1deg); }
+	20% { transform: translate(-3px, 0px) rotate(1deg); }
+	30% { transform: translate(3px, 2px) rotate(0deg); }
+	40% { transform: translate(1px, -1px) rotate(1deg); }
+	50% { transform: translate(-1px, 2px) rotate(-1deg); }
+	60% { transform: translate(-3px, 1px) rotate(0deg); }
+	70% { transform: translate(3px, 1px) rotate(-1deg); }
+	80% { transform: translate(-1px, -1px) rotate(1deg); }
+	90% { transform: translate(1px, 2px) rotate(0deg); }
+	100% { transform: translate(1px, -2px) rotate(-1deg); }
+}

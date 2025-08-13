@@ -1,0 +1,126 @@
+/* 
+
+
+
+1. Add your custom Css styles below
+
+2. Place the this code in your template: 
+
+
+
+ <link href="css/custom.css" rel="stylesheet">
+
+
+
+*/
+
+/*Home Page */	
+
+   
+
+.inspiro-slider .slide {
+
+    width: 100%;
+
+    height: 85% !important;
+
+    background-repeat: no-repeat;
+
+    background-size: cover;
+
+    background-position: 50% 20%;
+
+    z-index: 1;
+
+    width: 100%;
+
+    display: flex !important; }
+
+    .inspiro-slider .flickity-page-dots {
+
+    bottom: 150px !important;
+
+}
+
+ #header[data-transparent="true"] + #google-map {
+
+    top: -200px;
+
+    margin-bottom: -210px !important; 
+  }
+
+
+
+.portfolio-item,
+
+.grid-item {
+
+  width: 100%;
+
+  float: left;
+
+  height: auto;
+
+  padding: 0 0 0 0 !important;
+
+  cursor: pointer;
+
+  /*hover state*/
+
+  /*Portfolio Effects*/
+
+  /*Styles*/ }
+
+
+
+#footer .copyright-content {
+    min-height: 40px !important;
+    padding: 20px 0 !important;
+}
+
+
+.bg-overlay {
+
+  opacity: .25 !important;
+
+}
+
+#mainMenu.menu-vertical:not(.menu-overlay) nav > ul > li > a {
+
+    font-size: 13px !important;
+
+}
+
+body {
+
+    background-color: #181818 !important;
+
+}
+
+.service-textbox{
+
+  height: 520.078px !important;
+
+}
+
+.section-service {
+
+    padding: 43px 0 !important;
+
+}
+
+.header-bg-color{
+    
+    background-color: rgba(0, 0, 0, 0.49) !important;
+}
+
+
+
+.background-grey {
+    background-color: #d0d5da !important;
+}
+
+#mainMenu nav > ul > li .dropdown-menu > li > a, #mainMenu nav > ul > li .dropdown-menu > li > span, #mainMenu nav > ul > li .dropdown-menu > li [class*="col-"] > ul > li > a {
+    font-size: 14px !important;
+ 
+}
