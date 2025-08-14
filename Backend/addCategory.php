@@ -1,9 +1,71 @@
+<?php
+// Database connection
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+
+if (mysqli_connect_errno()) {
+    echo "Failed to connect to MySQL: " . mysqli_connect_error();
+    exit();
+}
+
+$message = '';
+$messageType = '';
+
+// Debug: Always show what we received
+echo "<!-- DEBUG: POST METHOD: " . $_SERVER['REQUEST_METHOD'] . " -->";
+echo "<!-- DEBUG: POST KEYS: " . implode(', ', array_keys($_POST)) . " -->";
+
+// Handle form submission
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
+    echo "<!-- FORM SUBMITTED: YES -->";
+    echo "<!-- POST DATA: " . htmlspecialchars(print_r($_POST, true)) . " -->";
+    
+    // Get form data
+    $name = isset($_POST['name']) ? trim($_POST['name']) : '';
+    $description = isset($_POST['description']) ? trim($_POST['description']) : '';
+    $category_level = isset($_POST['category_level']) ? intval($_POST['category_level']) : 0;
+    $active = isset($_POST['active']) ? intval($_POST['active']) : 1;
+    $display_order = isset($_POST['display_order']) ? intval($_POST['display_order']) : 0;
+    $user_id = 1;
+    
+    echo "<!-- RAW VALUES: name='$name', desc='$description', level=$category_level, active=$active, order=$display_order -->";
+    
+    // Validate required fields
+    if (empty($name)) {
+        $message = 'Category name is required!';
+        $messageType = 'error';
+        echo "<!-- VALIDATION ERROR: Name is empty -->";
+    } else {
+        // Try simple insert without prepared statements first
+        $name_escaped = mysqli_real_escape_string($link, $name);
+        $description_escaped = mysqli_real_escape_string($link, $description);
+        
+        $sql = "INSERT INTO product_categories (name, description, parent_id, category_level, active, display_order, user_id, created_at, updated_at) VALUES ('$name_escaped', '$description_escaped', NULL, $category_level, $active, $display_order, $user_id, NOW(), NOW())";
+        
+        echo "<!-- SQL QUERY: $sql -->";
+        
+        if (mysqli_query($link, $sql)) {
+            $message = 'Category added successfully! ID: ' . mysqli_insert_id($link);
+            $messageType = 'success';
+            echo "<!-- DATABASE INSERT: SUCCESS - ID: " . mysqli_insert_id($link) . " -->";
+        } else {
+            $message = 'Database error: ' . mysqli_error($link);
+            $messageType = 'error';
+            echo "<!-- DATABASE ERROR: " . mysqli_error($link) . " -->";
+        }
+    }
+} else {
+    echo "<!-- FORM NOT SUBMITTED - Method: " . $_SERVER['REQUEST_METHOD'] . " -->";
+    if (!isset($_POST['add_category'])) {
+        echo "<!-- add_category button not found in POST -->";
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en" class="">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Admin Panel</title>
+    <title>Add Category - Modern Admin Panel</title>
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -87,6 +149,9 @@
             height: 100vh;
             z-index: 20;
             transform: translateX(-100%);
+            top: 0;
+            left: 0;
+            overflow-y: auto;
         }
 
         .main-content {
@@ -94,6 +159,8 @@
             display: flex;
             flex-direction: column;
             transition: margin-left var(--transition-speed);
+            margin-left: 0;
+            width: 100%;
         }
 
         /* Mobile Header (for menu toggle) */
@@ -229,17 +296,35 @@
         /* Main Area */
         .main-area {
             flex-grow: 1;
-            padding: 0 2rem 2rem 2rem; /* Removed top padding */
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         
         .main-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            height: 88px; /* Matched height */
-            margin-bottom: 2rem; /* Replaced padding with margin */
+            height: 88px;
+            padding: 0 2rem;
             border-bottom: 1px solid var(--border-light);
+            border-left: 1px solid var(--border-light);
+            background-color: var(--card-bg-light);
+            position: fixed;
+            top: 0;
+            right: 0;
+            z-index: 15;
+            flex-shrink: 0;
+            width: calc(100% - 256px);
+            margin-left: 256px;
+        }
+        
+        .main-content-scroll {
+            flex-grow: 1;
+            padding: 2rem;
+            padding-top: calc(88px + 2rem);
+            overflow-y: auto;
+            height: 100vh;
         }
         
         .main-header h2 {
@@ -251,260 +336,244 @@
         .main-header .header-right {
             display: none; /* Hide on mobile, shown on desktop */
         }
-        
-        /* Search Bar Styles */
-        .search-container {
-            flex: 1;
-            max-width: 400px;
-            margin: 0 2rem;
+
+        /* Form Styles */
+        .form-container {
+            background-color: var(--card-bg-light);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
         }
         
-        .search-input-wrapper {
-            position: relative;
+        .form-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .form-header h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        
+        .view-all-btn {
+            background-color: #6b7280;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
             display: flex;
             align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
         }
         
-        .search-icon {
-            position: absolute;
-            left: 12px;
-            color: #9ca3af;
-            pointer-events: none;
-            transition: color 0.3s ease;
+        .view-all-btn:hover {
+            background-color: #4b5563;
         }
         
-        .search-input {
-            width: 100%;
-            padding: 10px 12px 10px 40px;
+        .message {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+        }
+        
+        .message.success {
+            background-color: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .message.error {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        
+        .dark .message.success {
+            background-color: rgba(22, 163, 74, 0.2);
+            color: #a7f3d0;
+            border-color: rgba(22, 163, 74, 0.3);
+        }
+        
+        .dark .message.error {
+            background-color: rgba(220, 38, 38, 0.2);
+            color: #fca5a5;
+            border-color: rgba(220, 38, 38, 0.3);
+        }
+        
+        .category-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-group input, .form-group textarea, .form-group select {
+            padding: 0.75rem;
             border: 1px solid var(--border-light);
-            border-radius: 8px;
-            font-size: 14px;
+            border-radius: 0.5rem;
+            font-size: 1rem;
             background-color: var(--card-bg-light);
             color: var(--text-light);
-            transition: all 0.3s ease;
+            transition: border-color 0.3s ease;
         }
         
-        .search-input:focus {
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
             outline: none;
             border-color: var(--indigo-400);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
         }
         
-        .search-input::placeholder {
-            color: #9ca3af;
-            transition: color 0.3s ease;
+        .file-upload-area {
+            position: relative;
+            border: 2px dashed var(--border-light);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
         }
         
-        /* Dark theme styles for search bar */
-        .dark .search-input {
-            background-color: var(--card-bg-dark);
-            border-color: var(--border-dark);
-            color: var(--text-light);
-        }
-        
-        .dark .search-input:focus {
-            border-color: var(--indigo-400);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        }
-        
-        .dark .search-input::placeholder {
-            color: #6b7280;
-        }
-        
-        .dark .search-icon {
-            color: #6b7280;
-        }
-        
-        /* Hover effects for dark theme */
-        .dark .search-input:hover {
-            border-color: #4b5563;
-        }
-        
-        .dark .search-input:focus:hover {
+        .file-upload-area:hover {
             border-color: var(--indigo-400);
         }
-
-        /* Stats Cards */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(1, 1fr);
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background-color: var(--card-bg-light);
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            padding: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .stat-card-icon {
-            padding: 0.75rem;
-            border-radius: 50%;
+        
+        .file-upload-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
         }
         
-        .stat-card-icon svg {
-            width: 1.5rem;
-            height: 1.5rem;
-        }
-        
-        .stat-card-info p:first-child {
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #6b7280;
-        }
-        
-        .dark .stat-card-info p:first-child {
+        .upload-placeholder svg {
             color: #9ca3af;
-        }
-
-        .stat-card-info p:last-child {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-light);
-        }
-        
-        /* Color variations for stat cards */
-        .icon-indigo { background-color: #e0e7ff; } .dark .icon-indigo { background-color: rgba(99, 102, 241, 0.2); }
-        .icon-indigo svg { color: #4338ca; } .dark .icon-indigo svg { color: #a5b4fc; }
-        .icon-green { background-color: #d1fae5; } .dark .icon-green { background-color: rgba(16, 185, 129, 0.2); }
-        .icon-green svg { color: #059669; } .dark .icon-green svg { color: #6ee7b7; }
-        .icon-yellow { background-color: #fef3c7; } .dark .icon-yellow { background-color: rgba(245, 158, 11, 0.2); }
-        .icon-yellow svg { color: #d97706; } .dark .icon-yellow svg { color: #fcd34d; }
-        .icon-red { background-color: #fee2e2; } .dark .icon-red { background-color: rgba(239, 68, 68, 0.2); }
-        .icon-red svg { color: #dc2626; } .dark .icon-red svg { color: #fca5a5; }
-
-        /* Recent Users Table */
-        .users-table-container {
-            background-color: var(--card-bg-light);
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            padding: 1.5rem;
-        }
-        
-        .users-table-container h3 {
-            font-size: 1.25rem;
-            font-weight: 600;
             margin-bottom: 1rem;
+        }
+        
+        .upload-placeholder p {
             color: var(--text-light);
+            margin-bottom: 0.5rem;
         }
         
-        .table-wrapper {
-            overflow-x: auto;
+        .file-info {
+            color: #6b7280;
+            font-size: 0.875rem;
         }
         
-        table {
-            width: 100%;
-            text-align: left;
-            border-collapse: collapse;
+        .image-preview {
+            position: relative;
+            display: inline-block;
         }
         
-        th, td {
-            padding: 0.75rem 1rem;
-            vertical-align: middle;
+        .image-preview img {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 0.5rem;
+            object-fit: cover;
         }
         
-        thead tr {
-            border-bottom: 1px solid var(--border-light);
+        .remove-image {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
         }
         
-        th {
-            font-weight: 600;
-            color: #4b5567;
-        }
-        .dark th {
-            color: #d1d5db;
-        }
-        
-        tbody tr {
-            border-bottom: 1px solid rgba(229, 231, 235, 0.5);
-            transition: background-color var(--transition-speed);
-        }
-        .dark tbody tr {
-             border-bottom: 1px solid rgba(55, 65, 81, 0.5);
-        }
-        tbody tr:last-child {
-            border-bottom: none;
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1rem;
         }
         
-        tbody tr:hover {
-            background-color: #f9fafb;
-        }
-        .dark tbody tr:hover {
-            background-color: rgba(55, 65, 81, 0.5);
-        }
-        
-        td {
-            color: #374151;
-        }
-        .dark td {
-            color: #9ca3af;
-        }
-        
-        .user-cell {
+        .btn-cancel, .btn-submit {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
             display: flex;
             align-items: center;
+            gap: 0.5rem;
         }
         
-        .user-cell img {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-right: 0.75rem;
+        .btn-cancel {
+            background-color: #6b7280;
+            color: white;
         }
         
-        .status-badge {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            border-radius: 9999px;
+        .btn-cancel:hover {
+            background-color: #4b5563;
         }
         
-        .status-active { color: #14532d; background-color: #dcfce7; }
-        .dark .status-active { color: #a7f3d0; background-color: rgba(22, 163, 74, 0.2); }
-        .status-pending { color: #78350f; background-color: #fef3c7; }
-        .dark .status-pending { color: #fcd34d; background-color: rgba(245, 158, 11, 0.2); }
-        .status-inactive { color: #991b1b; background-color: #fee2e2; }
-        .dark .status-inactive { color: #fca5a5; background-color: rgba(220, 38, 38, 0.2); }
+        .btn-submit {
+            background-color: var(--indigo-600);
+            color: white;
+        }
+        
+        .btn-submit:hover {
+            background-color: var(--indigo-400);
+        }
 
         /* Responsive */
-        @media (min-width: 640px) {
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
+        @media (max-width: 1023px) {
+            .main-header {
+                position: relative;
+                width: 100%;
+                margin-left: 0;
             }
-            .profile-button span {
-                display: inline;
+            .main-content-scroll {
+                padding-top: 2rem;
+                height: auto;
             }
         }
 
         @media (min-width: 1024px) {
             .sidebar {
-                position: relative;
+                position: fixed;
                 transform: translateX(0);
+                top: 0;
+                left: 0;
+                overflow-y: auto;
             }
             .main-content {
-                margin-left: 0;
+                margin-left: 256px;
+                width: calc(100% - 256px);
             }
             .mobile-header {
                 display: none;
             }
             .main-header .header-right {
                 display: flex;
-            }
-            .stats-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-        
-        /* Mobile responsive for search bar */
-        @media (max-width: 1023px) {
-            .search-container {
-                display: none; /* Hide search bar on mobile */
             }
         }
         
@@ -590,7 +659,7 @@
             </div>
 
             <nav class="sidebar-nav">
-                <a href="#" class="nav-link active">
+                <a href="index.php" class="nav-link">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span>Dashboard</span>
                 </a>
@@ -616,12 +685,12 @@
                     </a>
                     <ul class="submenu">
                         <li><a href="Allslider.php" class="submenu-link">All Slider</a></li>
-                        <li><a href="slider.php" class="submenu-link">Add Slider</a></li>
+                        <li><a href="addSlider.php" class="submenu-link">Add Slider</a></li>
                     </ul>
                 </div>
                 
                 <!-- Product Menu with Sub-menu -->
-                <div class="nav-item has-submenu">
+                <div class="nav-item has-submenu active">
                     <a href="#" class="nav-link submenu-toggle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
                         <span>Product</span>
@@ -630,8 +699,8 @@
                     <ul class="submenu">
                         <li><a href="../admin/products" class="submenu-link">All Product</a></li>
                         <li><a href="../admin/products/create" class="submenu-link">Add Product</a></li>
-                        <li><a href="../admin/categories" class="submenu-link">Product Category</a></li>
-                        <li><a href="../admin/categories/create" class="submenu-link">Add Category</a></li>
+                        <li><a href="productCategory.php" class="submenu-link">Product Category</a></li>
+                        <li><a href="addCategory.php" class="submenu-link" style="background-color: rgba(255, 255, 255, 0.1); color: #ffffff;">Add Category</a></li>
                     </ul>
                 </div>
             </nav>
@@ -664,19 +733,11 @@
             <main class="main-area">
                 <!-- Header for Desktop View -->
                 <div class="main-header">
-                    <h2>Dashboard</h2>
-                    
-                    <!-- Search Bar -->
-                    <div class="search-container">
-                        <div class="search-input-wrapper">
-                            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" class="search-input" placeholder="Search..." id="searchInput">
-                        </div>
-                    </div>
+                    <h2>Add New Category</h2>
                     
                     <div class="header-right">
                         <button id="theme-toggle-desktop" class="theme-toggle">
-                            <svg id="theme-icon-light-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                            <svg id="theme-icon-light-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9 Z"/></svg>
                             <svg id="theme-icon-dark-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                         </button>
                         <button class="profile-button">
@@ -686,95 +747,79 @@
                     </div>
                 </div>
                 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-icon icon-indigo">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <!-- Scrollable Content Area -->
+                <div class="main-content-scroll">
+                    <!-- Add Category Form -->
+                    <div class="form-container">
+                        <div class="form-header">
+                            <h3>Add New Category</h3>
+                            <a href="productCategory.php" class="view-all-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                                Back to All Categories
+                            </a>
                         </div>
-                        <div class="stat-card-info">
-                            <p>Total Users</p>
-                            <p>10,245</p>
-                        </div>
+                        
+                        <?php if ($message): ?>
+                            <div class="message <?php echo $messageType; ?>">
+                                <?php echo htmlspecialchars($message); ?>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <form method="POST" enctype="multipart/form-data" class="category-form">
+                            <div class="form-group">
+                                <label for="name">Category Name *</label>
+                                <input type="text" id="name" name="name" placeholder="Enter category name..." value="<?php echo isset($_POST['name']) ? htmlspecialchars($_POST['name']) : ''; ?>" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="description">Description</label>
+                                <textarea id="description" name="description" rows="4" placeholder="Enter category description..."><?php echo isset($_POST['description']) ? htmlspecialchars($_POST['description']) : ''; ?></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="category_level">Category Level *</label>
+                                <input type="number" id="category_level" name="category_level" value="<?php echo isset($_POST['category_level']) ? intval($_POST['category_level']) : 0; ?>" min="0" max="10" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="category_image">Category Image (Optional)</label>
+                                <div class="file-upload-area" id="fileUploadArea">
+                                    <input type="file" id="category_image" name="category_image" accept="image/*">
+                                    <div class="upload-placeholder">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+                                        <p>Click to upload or drag and drop</p>
+                                        <p class="file-info">JPG, JPEG, PNG, GIF up to 10MB</p>
+                                    </div>
+                                    <div class="image-preview" id="imagePreview" style="display: none;">
+                                        <img id="previewImg" src="" alt="Preview">
+                                        <button type="button" class="remove-image" onclick="removeImage()">×</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="active">Status *</label>
+                                <select id="active" name="active" required>
+                                    <option value="1" <?php echo (!isset($_POST['active']) || $_POST['active'] == '1') ? 'selected' : ''; ?>>Active</option>
+                                    <option value="0" <?php echo (isset($_POST['active']) && $_POST['active'] == '0') ? 'selected' : ''; ?>>Inactive</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="display_order">Display Order</label>
+                                <input type="number" id="display_order" name="display_order" value="<?php echo isset($_POST['display_order']) ? intval($_POST['display_order']) : 0; ?>" min="0">
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="button" class="btn-cancel" onclick="window.location.href='productCategory.php'">Cancel</button>
+                                <button type="submit" name="add_category" class="btn-submit">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+                                    Add Category
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-green">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Site Activity</p>
-                            <p>88.9%</p>
-                        </div>
-                    </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-yellow">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Total Sales</p>
-                            <p>$34,598</p>
-                        </div>
-                    </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-red">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Pending Issues</p>
-                            <p>21</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="users-table-container">
-                    <h3>Recent Users</h3>
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/c7d2fe/3730a3?text=LS" alt="User">
-                                            Liam Smith
-                                        </div>
-                                    </td>
-                                    <td>liam.s@example.com</td>
-                                    <td>Admin</td>
-                                    <td><span class="status-badge status-active">Active</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/fecaca/991b1b?text=OJ" alt="User">
-                                            Olivia Jones
-                                        </div>
-                                    </td>
-                                    <td>olivia.j@example.com</td>
-                                    <td>Editor</td>
-                                    <td><span class="status-badge status-pending">Pending</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/a7f3d0/065f46?text=NW" alt="User">
-                                            Noah Williams
-                                        </div>
-                                    </td>
-                                    <td>noah.w@example.com</td>
-                                    <td>Viewer</td>
-                                    <td><span class="status-badge status-inactive">Inactive</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                </div> <!-- Close main-content-scroll -->
             </main>
         </div>
     </div>
@@ -855,23 +900,73 @@
                 });
             });
             
-            // Search functionality
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.addEventListener('input', function(e) {
-                    const searchTerm = e.target.value.toLowerCase();
-                    // Add your search logic here
-                    console.log('Searching for:', searchTerm);
-                });
-                
-                // Add keyboard shortcut (Ctrl/Cmd + K) to focus search
-                document.addEventListener('keydown', function(e) {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                        e.preventDefault();
-                        searchInput.focus();
+            // File upload functionality
+            const fileInput = document.getElementById('category_image');
+            const fileUploadArea = document.getElementById('fileUploadArea');
+            const uploadPlaceholder = fileUploadArea.querySelector('.upload-placeholder');
+            const imagePreview = document.getElementById('imagePreview');
+            const previewImg = document.getElementById('previewImg');
+            
+            // Handle file selection
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    // Check file type
+                    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                    if (!allowedTypes.includes(file.type)) {
+                        alert('Please select a valid image file (JPG, JPEG, PNG, GIF)');
+                        fileInput.value = '';
+                        return;
                     }
-                });
-            }
+                    
+                    // Check file size (10MB)
+                    if (file.size > 10 * 1024 * 1024) {
+                        alert('File size must be less than 10MB');
+                        fileInput.value = '';
+                        return;
+                    }
+                    
+                    // Show preview
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImg.src = e.target.result;
+                        uploadPlaceholder.style.display = 'none';
+                        imagePreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            // Drag and drop functionality
+            fileUploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--indigo-400)';
+            });
+            
+            fileUploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--border-light)';
+            });
+            
+            fileUploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--border-light)';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    fileInput.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            // Remove image function
+            window.removeImage = function() {
+                fileInput.value = '';
+                uploadPlaceholder.style.display = 'block';
+                imagePreview.style.display = 'none';
+                previewImg.src = '';
+            };
+
         });
     </script>
 </body>
