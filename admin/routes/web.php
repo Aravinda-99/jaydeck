@@ -16,6 +16,8 @@ Route::get('login', 'Auth\LoginController@showLoginForm')->name('login');
 Route::post('logout', 'Auth\LoginController@logout')->name('logout');
 Route::post('login', 'Auth\LoginController@login');
 
+
+
 // Route::get('api-sync','ApiSyncController@index');
 
 Route::group(['middleware' => 'auth'], function () {
