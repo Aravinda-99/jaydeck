@@ -1,9 +1,104 @@
+
+<?php
+// Database connection
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+
+if (mysqli_connect_errno()) {
+    echo "Failed to connect to MySQL: " . mysqli_connect_error();
+    exit();
+}
+
+$message = '';
+$messageType = '';
+$slider = null;
+
+// Get slider ID from URL
+$slider_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+
+if ($slider_id <= 0) {
+    header('Location: Allslider.php');
+    exit();
+}
+
+// Fetch existing slider data
+$sql = "SELECT * FROM slider WHERE id = $slider_id";
+$result = mysqli_query($link, $sql);
+if ($result && mysqli_num_rows($result) > 0) {
+    $slider = mysqli_fetch_assoc($result);
+} else {
+    $message = 'Slider not found.';
+    $messageType = 'error';
+}
+
+// Handle form submission
+if (isset($_POST['update_slider']) && $slider) {
+    $description = mysqli_real_escape_string($link, $_POST['description']);
+    $status = mysqli_real_escape_string($link, $_POST['status']);
+    $updateImage = false;
+    $newImagePath = $slider['image']; // Keep existing image by default
+    
+    // Handle file upload if new image is provided
+    if (isset($_FILES['slider_image']) && $_FILES['slider_image']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = '../assets/img/slider/';
+        
+        // Create directory if it doesn't exist
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        $fileName = time() . '_' . basename($_FILES['slider_image']['name']);
+        $targetPath = $uploadDir . $fileName;
+        $dbPath = 'assets/img/slider/' . $fileName;
+        
+        // Check if file is an image
+        $imageFileType = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
+        $allowedTypes = array('jpg', 'jpeg', 'png', 'gif');
+        
+        if (in_array($imageFileType, $allowedTypes)) {
+            if (move_uploaded_file($_FILES['slider_image']['tmp_name'], $targetPath)) {
+                // Delete old image file
+                $oldImagePath = '../' . $slider['image'];
+                if (file_exists($oldImagePath)) {
+                    unlink($oldImagePath);
+                }
+                $newImagePath = $dbPath;
+                $updateImage = true;
+            } else {
+                $message = 'Error uploading new image.';
+                $messageType = 'error';
+            }
+        } else {
+            $message = 'Only JPG, JPEG, PNG, and GIF files are allowed.';
+            $messageType = 'error';
+        }
+    }
+    
+    // Update database if no errors
+    if (empty($message)) {
+        $sql = "UPDATE slider SET image = '$newImagePath', description = '$description', status = '$status' WHERE id = $slider_id";
+        
+        if (mysqli_query($link, $sql)) {
+            $message = 'Slider updated successfully!';
+            $messageType = 'success';
+            // Refresh slider data
+            $sql = "SELECT * FROM slider WHERE id = $slider_id";
+            $result = mysqli_query($link, $sql);
+            if ($result && mysqli_num_rows($result) > 0) {
+                $slider = mysqli_fetch_assoc($result);
+            }
+        } else {
+            $message = 'Error updating slider: ' . mysqli_error($link);
+            $messageType = 'error';
+        }
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en" class="">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Admin Panel</title>
+    <title>Edit Slider - Modern Admin Panel</title>
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -87,6 +182,9 @@
             height: 100vh;
             z-index: 20;
             transform: translateX(-100%);
+            top: 0;
+            left: 0;
+            overflow-y: auto;
         }
 
         .main-content {
@@ -94,6 +192,8 @@
             display: flex;
             flex-direction: column;
             transition: margin-left var(--transition-speed);
+            margin-left: 0;
+            width: 100%;
         }
 
         /* Mobile Header (for menu toggle) */
@@ -229,17 +329,35 @@
         /* Main Area */
         .main-area {
             flex-grow: 1;
-            padding: 0 2rem 2rem 2rem; /* Removed top padding */
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         
         .main-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            height: 88px; /* Matched height */
-            margin-bottom: 2rem; /* Replaced padding with margin */
+            height: 88px;
+            padding: 0 2rem;
             border-bottom: 1px solid var(--border-light);
+            border-left: 1px solid var(--border-light);
+            background-color: var(--card-bg-light);
+            position: fixed;
+            top: 0;
+            right: 0;
+            z-index: 15;
+            flex-shrink: 0;
+            width: calc(100% - 256px);
+            margin-left: 256px;
+        }
+        
+        .main-content-scroll {
+            flex-grow: 1;
+            padding: 2rem;
+            padding-top: calc(88px + 2rem);
+            overflow-y: auto;
+            height: 100vh;
         }
         
         .main-header h2 {
@@ -472,6 +590,312 @@
         .status-inactive { color: #991b1b; background-color: #fee2e2; }
         .dark .status-inactive { color: #fca5a5; background-color: rgba(220, 38, 38, 0.2); }
 
+        /* Slider Table Styles */
+        .slider-table-container {
+            background-color: var(--card-bg-light);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .slider-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .slider-table-header h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        
+        .add-slider-btn {
+            background-color: var(--indigo-600);
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .add-slider-btn:hover {
+            background-color: var(--indigo-400);
+        }
+        
+        .slider-image {
+            width: 60px;
+            height: 40px;
+            border-radius: 0.375rem;
+            object-fit: cover;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-edit, .btn-delete {
+            padding: 0.25rem 0.5rem;
+            border: none;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-edit {
+            background-color: #10b981;
+            color: white;
+        }
+        
+        .btn-edit:hover {
+            background-color: #059669;
+        }
+        
+        .btn-delete {
+            background-color: #ef4444;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background-color: #dc2626;
+        }
+
+        /* Form Styles */
+        .form-container {
+            background-color: var(--card-bg-light);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .form-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .form-header h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        
+        .view-all-btn {
+            background-color: #6b7280;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+        
+        .view-all-btn:hover {
+            background-color: #4b5563;
+        }
+        
+        .message {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+        }
+        
+        .message.success {
+            background-color: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .message.error {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        
+        .dark .message.success {
+            background-color: rgba(22, 163, 74, 0.2);
+            color: #a7f3d0;
+            border-color: rgba(22, 163, 74, 0.3);
+        }
+        
+        .dark .message.error {
+            background-color: rgba(220, 38, 38, 0.2);
+            color: #fca5a5;
+            border-color: rgba(220, 38, 38, 0.3);
+        }
+        
+        .slider-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-group input, .form-group textarea, .form-group select {
+            padding: 0.75rem;
+            border: 1px solid var(--border-light);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            background-color: var(--card-bg-light);
+            color: var(--text-light);
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--indigo-400);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .file-upload-area {
+            position: relative;
+            border: 2px dashed var(--border-light);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+        }
+        
+        .file-upload-area:hover {
+            border-color: var(--indigo-400);
+        }
+        
+        .file-upload-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        
+        .upload-placeholder svg {
+            color: #9ca3af;
+            margin-bottom: 1rem;
+        }
+        
+        .upload-placeholder p {
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+        
+        .file-info {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .image-preview {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .image-preview img {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 0.5rem;
+            object-fit: cover;
+        }
+        
+        .remove-image {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1rem;
+        }
+        
+        .btn-cancel, .btn-submit {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-cancel {
+            background-color: #6b7280;
+            color: white;
+        }
+        
+        .btn-cancel:hover {
+            background-color: #4b5563;
+        }
+        
+        .btn-submit {
+            background-color: var(--indigo-600);
+            color: white;
+        }
+        
+        .btn-submit:hover {
+            background-color: var(--indigo-400);
+        }
+        
+        /* Current Image Display */
+        .current-image {
+            margin-bottom: 1rem;
+        }
+        
+        .current-image p {
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+        
+        .current-slider-image {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 0.5rem;
+            object-fit: cover;
+            border: 2px solid var(--border-light);
+        }
+
         /* Responsive */
         @media (min-width: 640px) {
             .stats-grid {
@@ -482,13 +906,29 @@
             }
         }
 
+        @media (max-width: 1023px) {
+            .main-header {
+                position: relative;
+                width: 100%;
+                margin-left: 0;
+            }
+            .main-content-scroll {
+                padding-top: 2rem;
+                height: auto;
+            }
+        }
+
         @media (min-width: 1024px) {
             .sidebar {
-                position: relative;
+                position: fixed;
                 transform: translateX(0);
+                top: 0;
+                left: 0;
+                overflow-y: auto;
             }
             .main-content {
-                margin-left: 0;
+                margin-left: 256px;
+                width: calc(100% - 256px);
             }
             .mobile-header {
                 display: none;
@@ -608,7 +1048,7 @@
                 </a>
                 
                 <!-- Slider Menu with Sub-menu -->
-                <div class="nav-item has-submenu">
+                <div class="nav-item has-submenu active">
                     <a href="#" class="nav-link submenu-toggle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
                         <span>Slider</span>
@@ -616,7 +1056,7 @@
                     </a>
                     <ul class="submenu">
                         <li><a href="Allslider.php" class="submenu-link">All Slider</a></li>
-                        <li><a href="slider.php" class="submenu-link">Add Slider</a></li>
+                        <li><a href="addSlider.php" class="submenu-link">Add Slider</a></li>
                     </ul>
                 </div>
                 
@@ -664,19 +1104,11 @@
             <main class="main-area">
                 <!-- Header for Desktop View -->
                 <div class="main-header">
-                    <h2>Dashboard</h2>
-                    
-                    <!-- Search Bar -->
-                    <div class="search-container">
-                        <div class="search-input-wrapper">
-                            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" class="search-input" placeholder="Search..." id="searchInput">
-                        </div>
-                    </div>
+                    <h2>Edit Slider</h2>
                     
                     <div class="header-right">
                         <button id="theme-toggle-desktop" class="theme-toggle">
-                            <svg id="theme-icon-light-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                            <svg id="theme-icon-light-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9 Z"/></svg>
                             <svg id="theme-icon-dark-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                         </button>
                         <button class="profile-button">
@@ -686,95 +1118,80 @@
                     </div>
                 </div>
                 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-icon icon-indigo">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <!-- Scrollable Content Area -->
+                <div class="main-content-scroll">
+                    <!-- Add Slider Form -->
+                    <?php if ($slider): ?>
+                    <div class="form-container">
+                        <div class="form-header">
+                            <h3>Edit Slider #<?php echo $slider['id']; ?></h3>
+                            <a href="Allslider.php" class="view-all-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                                Back to All Sliders
+                            </a>
                         </div>
-                        <div class="stat-card-info">
-                            <p>Total Users</p>
-                            <p>10,245</p>
-                        </div>
+                        
+                        <?php if ($message): ?>
+                            <div class="message <?php echo $messageType; ?>">
+                                <?php echo htmlspecialchars($message); ?>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <form method="POST" enctype="multipart/form-data" class="slider-form">
+                            <div class="form-group">
+                                <label for="slider_image">Slider Image</label>
+                                <div class="current-image">
+                                    <p>Current Image:</p>
+                                    <img src="../<?php echo htmlspecialchars($slider['image']); ?>" alt="Current Slider" class="current-slider-image" onerror="this.src='https://placehold.co/200x150/6366f1/ffffff?text=No+Image'">
+                                </div>
+                                <div class="file-upload-area" id="fileUploadArea">
+                                    <input type="file" id="slider_image" name="slider_image" accept="image/*">
+                                    <div class="upload-placeholder">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+                                        <p>Click to upload new image or drag and drop</p>
+                                        <p class="file-info">JPG, JPEG, PNG, GIF up to 10MB (Optional)</p>
+                                    </div>
+                                    <div class="image-preview" id="imagePreview" style="display: none;">
+                                        <img id="previewImg" src="" alt="Preview">
+                                        <button type="button" class="remove-image" onclick="removeImage()">×</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="description">Description *</label>
+                                <textarea id="description" name="description" rows="4" placeholder="Enter slider description..." required><?php echo htmlspecialchars($slider['description']); ?></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="status">Status *</label>
+                                <select id="status" name="status" required>
+                                    <option value="active" <?php echo ($slider['status'] === 'active') ? 'selected' : ''; ?>>Active</option>
+                                    <option value="inactive" <?php echo ($slider['status'] === 'inactive') ? 'selected' : ''; ?>>Inactive</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="button" class="btn-cancel" onclick="window.location.href='Allslider.php'">Cancel</button>
+                                <button type="submit" name="update_slider" class="btn-submit">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+                                    Update Slider
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-green">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    <?php else: ?>
+                    <div class="form-container">
+                        <div class="message error">
+                            <?php echo $message ?: 'Slider not found.'; ?>
                         </div>
-                        <div class="stat-card-info">
-                            <p>Site Activity</p>
-                            <p>88.9%</p>
-                        </div>
+                        <a href="Allslider.php" class="view-all-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                            Back to All Sliders
+                        </a>
                     </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-yellow">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Total Sales</p>
-                            <p>$34,598</p>
-                        </div>
-                    </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-red">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Pending Issues</p>
-                            <p>21</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="users-table-container">
-                    <h3>Recent Users</h3>
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/c7d2fe/3730a3?text=LS" alt="User">
-                                            Liam Smith
-                                        </div>
-                                    </td>
-                                    <td>liam.s@example.com</td>
-                                    <td>Admin</td>
-                                    <td><span class="status-badge status-active">Active</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/fecaca/991b1b?text=OJ" alt="User">
-                                            Olivia Jones
-                                        </div>
-                                    </td>
-                                    <td>olivia.j@example.com</td>
-                                    <td>Editor</td>
-                                    <td><span class="status-badge status-pending">Pending</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/a7f3d0/065f46?text=NW" alt="User">
-                                            Noah Williams
-                                        </div>
-                                    </td>
-                                    <td>noah.w@example.com</td>
-                                    <td>Viewer</td>
-                                    <td><span class="status-badge status-inactive">Inactive</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                    <?php endif; ?>
+                </div> <!-- Close main-content-scroll -->
             </main>
         </div>
     </div>
@@ -855,23 +1272,71 @@
                 });
             });
             
-            // Search functionality
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.addEventListener('input', function(e) {
-                    const searchTerm = e.target.value.toLowerCase();
-                    // Add your search logic here
-                    console.log('Searching for:', searchTerm);
-                });
-                
-                // Add keyboard shortcut (Ctrl/Cmd + K) to focus search
-                document.addEventListener('keydown', function(e) {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                        e.preventDefault();
-                        searchInput.focus();
+            // File upload functionality
+            const fileInput = document.getElementById('slider_image');
+            const fileUploadArea = document.getElementById('fileUploadArea');
+            const uploadPlaceholder = fileUploadArea.querySelector('.upload-placeholder');
+            const imagePreview = document.getElementById('imagePreview');
+            const previewImg = document.getElementById('previewImg');
+            
+            // Handle file selection
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    // Check file type
+                    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                    if (!allowedTypes.includes(file.type)) {
+                        alert('Please select a valid image file (JPG, JPEG, PNG, GIF)');
+                        return;
                     }
-                });
-            }
+                    
+                    // Check file size (10MB)
+                    if (file.size > 10 * 1024 * 1024) {
+                        alert('File size must be less than 10MB');
+                        return;
+                    }
+                    
+                    // Show preview
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImg.src = e.target.result;
+                        uploadPlaceholder.style.display = 'none';
+                        imagePreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            // Drag and drop functionality
+            fileUploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--indigo-400)';
+            });
+            
+            fileUploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--border-light)';
+            });
+            
+            fileUploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--border-light)';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    fileInput.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            // Remove image function
+            window.removeImage = function() {
+                fileInput.value = '';
+                uploadPlaceholder.style.display = 'block';
+                imagePreview.style.display = 'none';
+                previewImg.src = '';
+            };
+
         });
     </script>
 </body>

@@ -1,9 +1,52 @@
+
+<?php
+// Database connection
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+
+if (mysqli_connect_errno()) {
+    echo "Failed to connect to MySQL: " . mysqli_connect_error();
+    exit();
+}
+
+// Handle category deletion
+if (isset($_POST['delete_category'])) {
+    $category_id = intval($_POST['delete_category']);
+    
+    // First get the image path to delete the file
+    $get_image_sql = "SELECT image FROM product_categories WHERE id = $category_id";
+    $image_result = mysqli_query($link, $get_image_sql);
+    if ($image_result && $image_row = mysqli_fetch_assoc($image_result)) {
+        $image_path = "../" . $image_row['image'];
+        if (file_exists($image_path) && !empty($image_row['image'])) {
+            unlink($image_path); // Delete the image file
+        }
+    }
+    
+    // Delete from database (soft delete by setting deleted_at)
+    $delete_sql = "UPDATE product_categories SET deleted_at = NOW() WHERE id = $category_id";
+    if (mysqli_query($link, $delete_sql)) {
+        echo "<script>alert('Category deleted successfully!'); window.location.href='productCategory.php';</script>";
+    } else {
+        echo "<script>alert('Error deleting category: " . mysqli_error($link) . "');</script>";
+    }
+}
+
+// Fetch category data from database
+$sql = "SELECT * FROM product_categories WHERE deleted_at IS NULL ORDER BY display_order ASC, created_at DESC";
+$result = mysqli_query($link, $sql);
+$categories = [];
+if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $categories[] = $row;
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en" class="">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Admin Panel</title>
+    <title>Product Categories - Modern Admin Panel</title>
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -87,6 +130,9 @@
             height: 100vh;
             z-index: 20;
             transform: translateX(-100%);
+            top: 0;
+            left: 0;
+            overflow-y: auto;
         }
 
         .main-content {
@@ -94,6 +140,8 @@
             display: flex;
             flex-direction: column;
             transition: margin-left var(--transition-speed);
+            margin-left: 0;
+            width: 100%;
         }
 
         /* Mobile Header (for menu toggle) */
@@ -229,17 +277,35 @@
         /* Main Area */
         .main-area {
             flex-grow: 1;
-            padding: 0 2rem 2rem 2rem; /* Removed top padding */
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         
         .main-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            height: 88px; /* Matched height */
-            margin-bottom: 2rem; /* Replaced padding with margin */
+            height: 88px;
+            padding: 0 2rem;
             border-bottom: 1px solid var(--border-light);
+            border-left: 1px solid var(--border-light);
+            background-color: var(--card-bg-light);
+            position: fixed;
+            top: 0;
+            right: 0;
+            z-index: 15;
+            flex-shrink: 0;
+            width: calc(100% - 256px);
+            margin-left: 256px;
+        }
+        
+        .main-content-scroll {
+            flex-grow: 1;
+            padding: 2rem;
+            padding-top: calc(88px + 2rem);
+            overflow-y: auto;
+            height: 100vh;
         }
         
         .main-header h2 {
@@ -472,6 +538,133 @@
         .status-inactive { color: #991b1b; background-color: #fee2e2; }
         .dark .status-inactive { color: #fca5a5; background-color: rgba(220, 38, 38, 0.2); }
 
+        /* Category Table Styles */
+        .category-table-container {
+            background-color: var(--card-bg-light);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .category-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .category-table-header h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        
+        .add-category-btn {
+            background-color: var(--indigo-600);
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .add-category-btn:hover {
+            background-color: var(--indigo-400);
+        }
+        
+        .category-image {
+            width: 60px;
+            height: 40px;
+            border-radius: 0.375rem;
+            object-fit: cover;
+        }
+        
+        /* Slider Table Styles */
+        .slider-table-container {
+            background-color: var(--card-bg-light);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .slider-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .slider-table-header h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        
+        .add-slider-btn {
+            background-color: var(--indigo-600);
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .add-slider-btn:hover {
+            background-color: var(--indigo-400);
+        }
+        
+        .slider-image {
+            width: 60px;
+            height: 40px;
+            border-radius: 0.375rem;
+            object-fit: cover;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-edit, .btn-delete {
+            padding: 0.25rem 0.5rem;
+            border: none;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-edit {
+            background-color: #10b981;
+            color: white;
+        }
+        
+        .btn-edit:hover {
+            background-color: #059669;
+        }
+        
+        .btn-delete {
+            background-color: #ef4444;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background-color: #dc2626;
+        }
+
         /* Responsive */
         @media (min-width: 640px) {
             .stats-grid {
@@ -482,13 +675,29 @@
             }
         }
 
+        @media (max-width: 1023px) {
+            .main-header {
+                position: relative;
+                width: 100%;
+                margin-left: 0;
+            }
+            .main-content-scroll {
+                padding-top: 2rem;
+                height: auto;
+            }
+        }
+
         @media (min-width: 1024px) {
             .sidebar {
-                position: relative;
+                position: fixed;
                 transform: translateX(0);
+                top: 0;
+                left: 0;
+                overflow-y: auto;
             }
             .main-content {
-                margin-left: 0;
+                margin-left: 256px;
+                width: calc(100% - 256px);
             }
             .mobile-header {
                 display: none;
@@ -590,7 +799,7 @@
             </div>
 
             <nav class="sidebar-nav">
-                <a href="#" class="nav-link active">
+                <a href="index.php" class="nav-link">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span>Dashboard</span>
                 </a>
@@ -616,12 +825,12 @@
                     </a>
                     <ul class="submenu">
                         <li><a href="Allslider.php" class="submenu-link">All Slider</a></li>
-                        <li><a href="slider.php" class="submenu-link">Add Slider</a></li>
+                        <li><a href="addSlider.php" class="submenu-link">Add Slider</a></li>
                     </ul>
                 </div>
                 
                 <!-- Product Menu with Sub-menu -->
-                <div class="nav-item has-submenu">
+                <div class="nav-item has-submenu active">
                     <a href="#" class="nav-link submenu-toggle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
                         <span>Product</span>
@@ -630,8 +839,8 @@
                     <ul class="submenu">
                         <li><a href="../admin/products" class="submenu-link">All Product</a></li>
                         <li><a href="../admin/products/create" class="submenu-link">Add Product</a></li>
-                        <li><a href="../admin/categories" class="submenu-link">Product Category</a></li>
-                        <li><a href="../admin/categories/create" class="submenu-link">Add Category</a></li>
+                        <li><a href="productCategory.php" class="submenu-link" style="background-color: rgba(255, 255, 255, 0.1); color: #ffffff;">Product Category</a></li>
+                        <li><a href="addCategory.php" class="submenu-link">Add Category</a></li>
                     </ul>
                 </div>
             </nav>
@@ -664,19 +873,19 @@
             <main class="main-area">
                 <!-- Header for Desktop View -->
                 <div class="main-header">
-                    <h2>Dashboard</h2>
+                    <h2>Product Categories</h2>
                     
                     <!-- Search Bar -->
                     <div class="search-container">
                         <div class="search-input-wrapper">
                             <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" class="search-input" placeholder="Search..." id="searchInput">
+                            <input type="text" class="search-input" placeholder="Search categories..." id="searchInput">
                         </div>
                     </div>
                     
                     <div class="header-right">
                         <button id="theme-toggle-desktop" class="theme-toggle">
-                            <svg id="theme-icon-light-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                            <svg id="theme-icon-light-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9 Z"/></svg>
                             <svg id="theme-icon-dark-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                         </button>
                         <button class="profile-button">
@@ -686,95 +895,76 @@
                     </div>
                 </div>
                 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-icon icon-indigo">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Total Users</p>
-                            <p>10,245</p>
-                        </div>
+                <!-- Scrollable Content Area -->
+                <div class="main-content-scroll">
+                    <!-- All Categories Table -->
+                <div class="category-table-container">
+                    <div class="category-table-header">
+                        <h3>Category Management</h3>
+                        <a href="../admin/categories/create" class="add-category-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add New Category
+                        </a>
                     </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-green">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Site Activity</p>
-                            <p>88.9%</p>
-                        </div>
-                    </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-yellow">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Total Sales</p>
-                            <p>$34,598</p>
-                        </div>
-                    </div>
-                     <div class="stat-card">
-                        <div class="stat-card-icon icon-red">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </div>
-                        <div class="stat-card-info">
-                            <p>Pending Issues</p>
-                            <p>21</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="users-table-container">
-                    <h3>Recent Users</h3>
+                    
                     <div class="table-wrapper">
                         <table>
                             <thead>
                                 <tr>
+                                    <th>ID</th>
+                                    <th>Image</th>
                                     <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
+                                    <th>Description</th>
+                                    <th>Parent ID</th>
+                                    <th>Level</th>
+                                    <th>Order</th>
+                                    <th>Created Date</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/c7d2fe/3730a3?text=LS" alt="User">
-                                            Liam Smith
-                                        </div>
-                                    </td>
-                                    <td>liam.s@example.com</td>
-                                    <td>Admin</td>
-                                    <td><span class="status-badge status-active">Active</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/fecaca/991b1b?text=OJ" alt="User">
-                                            Olivia Jones
-                                        </div>
-                                    </td>
-                                    <td>olivia.j@example.com</td>
-                                    <td>Editor</td>
-                                    <td><span class="status-badge status-pending">Pending</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/a7f3d0/065f46?text=NW" alt="User">
-                                            Noah Williams
-                                        </div>
-                                    </td>
-                                    <td>noah.w@example.com</td>
-                                    <td>Viewer</td>
-                                    <td><span class="status-badge status-inactive">Inactive</span></td>
-                                </tr>
+                                <?php if (!empty($categories)): ?>
+                                    <?php foreach ($categories as $index => $category): ?>
+                                        <tr>
+                                            <td><?php echo $category['id']; ?></td>
+                                            <td>
+                                                <?php if (!empty($category['image'])): ?>
+                                                    <img src="../<?php echo htmlspecialchars($category['image']); ?>" 
+                                                         alt="<?php echo htmlspecialchars($category['name'] ?? 'Category ' . ($index + 1)); ?>" 
+                                                         class="category-image"
+                                                         onerror="this.src='https://placehold.co/60x40/6366f1/ffffff?text=CAT'">
+                                                <?php else: ?>
+                                                    <img src="https://placehold.co/60x40/6366f1/ffffff?text=CAT" 
+                                                         alt="No Image" 
+                                                         class="category-image">
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($category['name'] ?? 'Unnamed Category'); ?></td>
+                                            <td><?php echo htmlspecialchars($category['description'] ?? 'No Description'); ?></td>
+                                            <td><?php echo $category['parent_id'] ?? '-'; ?></td>
+                                            <td><?php echo $category['category_level'] ?? 0; ?></td>
+                                            <td><?php echo $category['display_order'] ?? '-'; ?></td>
+                                            <td><?php echo date('Y-m-d', strtotime($category['created_at'])); ?></td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button class="btn-edit" onclick="editCategory(<?php echo $category['id']; ?>)">Edit</button>
+                                                    <button class="btn-delete" onclick="deleteCategory(<?php echo $category['id']; ?>)">Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td colspan="9" style="text-align: center; padding: 2rem; color: #6b7280;">
+                                            No categories found. <a href="../admin/categories/create" style="color: var(--indigo-600);">Add your first category</a>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
+                </div> <!-- Close main-content-scroll -->
             </main>
         </div>
     </div>
@@ -860,8 +1050,21 @@
             if (searchInput) {
                 searchInput.addEventListener('input', function(e) {
                     const searchTerm = e.target.value.toLowerCase();
-                    // Add your search logic here
-                    console.log('Searching for:', searchTerm);
+                    const tableRows = document.querySelectorAll('.category-table-container tbody tr');
+                    
+                    tableRows.forEach(row => {
+                        const id = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+                        const name = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                        const description = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                        const parentId = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+                        const order = row.querySelector('td:nth-child(7)').textContent.toLowerCase();
+                        
+                        if (id.includes(searchTerm) || name.includes(searchTerm) || description.includes(searchTerm) || parentId.includes(searchTerm) || order.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
                 });
                 
                 // Add keyboard shortcut (Ctrl/Cmd + K) to focus search
@@ -872,6 +1075,32 @@
                     }
                 });
             }
+
+            // Edit category function
+            window.editCategory = function(categoryId) {
+                // Redirect to edit page with category ID
+                window.location.href = '../admin/categories/' + categoryId + '/edit';
+            };
+
+            // Delete category function
+            window.deleteCategory = function(categoryId) {
+                if (confirm('Are you sure you want to delete this category?')) {
+                    // Create form and submit for deletion
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'productCategory.php';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'delete_category';
+                    input.value = categoryId;
+                    
+                    form.appendChild(input);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            };
+
         });
     </script>
 </body>
