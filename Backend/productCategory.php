@@ -13,7 +13,7 @@ if (isset($_POST['delete_category'])) {
     $category_id = intval($_POST['delete_category']);
     
     // First get the image path to delete the file
-    $get_image_sql = "SELECT image FROM product_category WHERE id = $category_id";
+    $get_image_sql = "SELECT image FROM product_categories WHERE id = $category_id";
     $image_result = mysqli_query($link, $get_image_sql);
     if ($image_result && $image_row = mysqli_fetch_assoc($image_result)) {
         $image_path = "../" . $image_row['image'];
@@ -22,8 +22,8 @@ if (isset($_POST['delete_category'])) {
         }
     }
     
-    // Delete from database (hard delete since no deleted_at column visible)
-    $delete_sql = "DELETE FROM product_category WHERE id = $category_id";
+    // Soft delete from database (set deleted_at timestamp)
+    $delete_sql = "UPDATE product_categories SET deleted_at = NOW() WHERE id = $category_id";
     if (mysqli_query($link, $delete_sql)) {
         echo "<script>alert('Category deleted successfully!'); window.location.href='productCategory.php';</script>";
     } else {
@@ -31,8 +31,11 @@ if (isset($_POST['delete_category'])) {
     }
 }
 
-// Fetch category data from database
-$sql = "SELECT * FROM product_category ORDER BY display_order ASC, created_at DESC";
+// Fetch category data from database (using product_categories table)
+$sql = "SELECT id, name, description, parent_id, category_level, image, active, display_order, user_id, created_at, updated_at 
+        FROM product_categories 
+        WHERE deleted_at IS NULL 
+        ORDER BY display_order ASC, created_at DESC";
 $result = mysqli_query($link, $sql);
 $categories = [];
 if ($result) {
@@ -915,7 +918,11 @@ if ($result) {
                                     <th>Image</th>
                                     <th>Name</th>
                                     <th>Description</th>
+                                    <th>Parent ID</th>
+                                    <th>Category Level</th>
+                                    <th>Status</th>
                                     <th>Display Order</th>
+                                    <th>Created Date</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -937,8 +944,34 @@ if ($result) {
                                                 <?php endif; ?>
                                             </td>
                                             <td><?php echo htmlspecialchars($category['name'] ?? 'Unnamed Category'); ?></td>
-                                            <td><?php echo htmlspecialchars($category['description'] ?? 'No Description'); ?></td>
+                                            <td><?php echo htmlspecialchars(substr($category['description'] ?? 'No Description', 0, 50)) . (strlen($category['description'] ?? '') > 50 ? '...' : ''); ?></td>
+                                            <td><?php echo $category['parent_id'] ? $category['parent_id'] : '-'; ?></td>
+                                            <td>
+                                                <?php 
+                                                $level_text = '';
+                                                switch($category['category_level']) {
+                                                    case 0:
+                                                        $level_text = 'Main';
+                                                        break;
+                                                    case 1:
+                                                        $level_text = 'Sub 1';
+                                                        break;
+                                                    case 2:
+                                                        $level_text = 'Sub 2';
+                                                        break;
+                                                    default:
+                                                        $level_text = 'Level ' . $category['category_level'];
+                                                }
+                                                echo $level_text;
+                                                ?>
+                                            </td>
+                                            <td>
+                                                <span class="status-badge <?php echo $category['active'] ? 'status-active' : 'status-inactive'; ?>">
+                                                    <?php echo $category['active'] ? 'Active' : 'Inactive'; ?>
+                                                </span>
+                                            </td>
                                             <td><?php echo $category['display_order'] ?? '-'; ?></td>
+                                            <td><?php echo date('Y-m-d H:i', strtotime($category['created_at'])); ?></td>
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="btn-edit" onclick="editCategory(<?php echo $category['id']; ?>)">Edit</button>
@@ -949,7 +982,7 @@ if ($result) {
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="6" style="text-align: center; padding: 2rem; color: #6b7280;">
+                                        <td colspan="10" style="text-align: center; padding: 2rem; color: #6b7280;">
                                             No categories found. <a href="addCategory.php" style="color: var(--indigo-600);">Add your first category</a>
                                         </td>
                                     </tr>
@@ -1050,9 +1083,14 @@ if ($result) {
                         const id = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
                         const name = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
                         const description = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
-                        const order = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+                        const parentId = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+                        const level = row.querySelector('td:nth-child(6)').textContent.toLowerCase();
+                        const status = row.querySelector('td:nth-child(7)').textContent.toLowerCase();
+                        const order = row.querySelector('td:nth-child(8)').textContent.toLowerCase();
                         
-                        if (id.includes(searchTerm) || name.includes(searchTerm) || description.includes(searchTerm) || order.includes(searchTerm)) {
+                        if (id.includes(searchTerm) || name.includes(searchTerm) || description.includes(searchTerm) || 
+                            parentId.includes(searchTerm) || level.includes(searchTerm) || status.includes(searchTerm) || 
+                            order.includes(searchTerm)) {
                             row.style.display = '';
                         } else {
                             row.style.display = 'none';
