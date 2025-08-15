@@ -1,7 +1,7 @@
 
 <?php
 // Database connection
-$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -13,17 +13,17 @@ if (isset($_POST['delete_product'])) {
     $product_id = intval($_POST['delete_product']);
     
     // First get the image path to delete the file
-    $get_image_sql = "SELECT image FROM products WHERE id = $product_id";
+    $get_image_sql = "SELECT image FROM product2 WHERE id = $product_id";
     $image_result = mysqli_query($link, $get_image_sql);
     if ($image_result && $image_row = mysqli_fetch_assoc($image_result)) {
         $image_path = "../" . $image_row['image'];
-        if (file_exists($image_path)) {
+        if (file_exists($image_path) && !empty($image_row['image'])) {
             unlink($image_path); // Delete the image file
         }
     }
     
     // Delete from database
-    $delete_sql = "DELETE FROM products WHERE id = $product_id";
+    $delete_sql = "DELETE FROM product2 WHERE id = $product_id";
     if (mysqli_query($link, $delete_sql)) {
         echo "<script>alert('Product deleted successfully!'); window.location.href='allProduct.php';</script>";
     } else {
@@ -31,10 +31,12 @@ if (isset($_POST['delete_product'])) {
     }
 }
 
-// Fetch product data from database with brand information
-$sql = "SELECT p.id, p.name, p.code, p.slug, p.description, p.image, p.active, p.brand_id, p.created_at, p.updated_at, b.name as brand_name 
+// Fetch product data from database with brand and category information
+$sql = "SELECT p.id, p.name, p.code, p.slug, p.description, p.image, p.active, p.brand_id, p.cat_id, p.created_at, p.updated_at, 
+               b.name as brand_name, c.name as category_name 
         FROM product2 p 
-        LEFT JOIN brands b ON p.brand_id = b.id 
+        LEFT JOIN brand b ON p.brand_id = b.id 
+        LEFT JOIN product_category c ON p.cat_id = c.id 
         ORDER BY p.created_at DESC";
 $result = mysqli_query($link, $sql);
 $products = [];
@@ -793,10 +795,10 @@ if ($result) {
                         <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
                     </a>
                     <ul class="submenu">
-                        <li><a href="../admin/products" class="submenu-link">All Product</a></li>
-                        <li><a href="../admin/products/create" class="submenu-link">Add Product</a></li>
+                        <li><a href="allProduct.php" class="submenu-link">All Product</a></li>
+                        <li><a href="addProduct.php" class="submenu-link">Add Product</a></li>
                         <li><a href="productCategory.php" class="submenu-link">Product Category</a></li>
-                        <li><a href="categories/create" class="submenu-link">Add Category</a></li>
+                        <li><a href="addCategory.php" class="submenu-link">Add Category</a></li>
                     </ul>
                 </div>
             </nav>
@@ -835,7 +837,7 @@ if ($result) {
                     <div class="search-container">
                         <div class="search-input-wrapper">
                             <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" class="search-input" placeholder="Search products by name, code or brand..." id="searchInput">
+                            <input type="text" class="search-input" placeholder="Search products by name, code, brand or category..." id="searchInput">
                         </div>
                     </div>
                     
@@ -874,6 +876,7 @@ if ($result) {
                                     <th>Slug</th>
                                     <th>Description</th>
                                     <th>Brand</th>
+                                    <th>Category</th>
                                     <th>Status</th>
                                     <th>Created At</th>
                                     <th>Updated At</th>
@@ -896,6 +899,7 @@ if ($result) {
                                             <td><?php echo htmlspecialchars($product['slug']); ?></td>
                                             <td><?php echo htmlspecialchars(substr($product['description'], 0, 50)) . '...'; ?></td>
                                             <td><?php echo htmlspecialchars($product['brand_name'] ?? 'No Brand'); ?></td>
+                                            <td><?php echo htmlspecialchars($product['category_name'] ?? 'No Category'); ?></td>
                                             <td>
                                                 <span class="status-badge <?php echo ($product['active'] == 1) ? 'status-active' : 'status-inactive'; ?>">
                                                     <?php echo ($product['active'] == 1) ? 'Active' : 'Inactive'; ?>
@@ -913,7 +917,7 @@ if ($result) {
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="11" style="text-align: center; padding: 2rem; color: #6b7280;">
+                                        <td colspan="12" style="text-align: center; padding: 2rem; color: #6b7280;">
                                             No products found. <a href="addProduct.php" style="color: var(--indigo-600);">Add your first product</a>
                                         </td>
                                     </tr>
@@ -1017,7 +1021,8 @@ if ($result) {
                         const slug = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
                         const description = row.querySelector('td:nth-child(6)').textContent.toLowerCase();
                         const brand = row.querySelector('td:nth-child(7)').textContent.toLowerCase();
-                        const status = row.querySelector('td:nth-child(8)').textContent.toLowerCase();
+                        const category = row.querySelector('td:nth-child(8)').textContent.toLowerCase();
+                        const status = row.querySelector('td:nth-child(9)').textContent.toLowerCase();
                         
                         if (id.includes(searchTerm) || 
                             name.includes(searchTerm) || 
@@ -1025,6 +1030,7 @@ if ($result) {
                             slug.includes(searchTerm) || 
                             description.includes(searchTerm) || 
                             brand.includes(searchTerm) || 
+                            category.includes(searchTerm) || 
                             status.includes(searchTerm)) {
                             row.style.display = '';
                         } else {
