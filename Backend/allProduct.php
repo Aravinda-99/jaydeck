@@ -13,7 +13,7 @@ if (isset($_POST['delete_product'])) {
     $product_id = intval($_POST['delete_product']);
     
     // First get the image path to delete the file
-    $get_image_sql = "SELECT image FROM product2 WHERE id = $product_id";
+    $get_image_sql = "SELECT image FROM products WHERE id = $product_id";
     $image_result = mysqli_query($link, $get_image_sql);
     if ($image_result && $image_row = mysqli_fetch_assoc($image_result)) {
         $image_path = "../" . $image_row['image'];
@@ -23,7 +23,7 @@ if (isset($_POST['delete_product'])) {
     }
     
     // Delete from database
-    $delete_sql = "DELETE FROM product2 WHERE id = $product_id";
+    $delete_sql = "DELETE FROM products WHERE id = $product_id";
     if (mysqli_query($link, $delete_sql)) {
         echo "<script>alert('Product deleted successfully!'); window.location.href='allProduct.php';</script>";
     } else {
@@ -31,13 +31,31 @@ if (isset($_POST['delete_product'])) {
     }
 }
 
-// Fetch product data from database with brand and category information
-$sql = "SELECT p.id, p.name, p.code, p.slug, p.description, p.image, p.active, p.brand_id, p.cat_id, p.created_at, p.updated_at, 
-               b.name as brand_name, c.name as category_name 
-        FROM product2 p 
+// Pagination variables
+$items_per_page = 10;
+$current_page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset = ($current_page - 1) * $items_per_page;
+
+// Get total count of products
+$count_sql = "SELECT COUNT(*) as total FROM products p";
+$count_result = mysqli_query($link, $count_sql);
+$total_items = 0;
+if ($count_result) {
+    $count_row = mysqli_fetch_assoc($count_result);
+    $total_items = $count_row['total'];
+}
+$total_pages = ceil($total_items / $items_per_page);
+
+// Fetch product data from database with brand and category information (with pagination)
+$sql = "SELECT p.id, p.name, p.code, p.slug, p.description, p.image, p.active, p.brand_id, p.main_cat_id, p.sub_cat_1_id, p.sub_cat_2_id, 
+               b.name as brand_name, c1.name as main_category_name, c2.name as sub_cat_1_name, c3.name as sub_cat_2_name 
+        FROM products p 
         LEFT JOIN brand b ON p.brand_id = b.id 
-        LEFT JOIN product_category c ON p.cat_id = c.id 
-        ORDER BY p.created_at DESC";
+        LEFT JOIN product_categories c1 ON p.main_cat_id = c1.id 
+        LEFT JOIN product_categories c2 ON p.sub_cat_1_id = c2.id 
+        LEFT JOIN product_categories c3 ON p.sub_cat_2_id = c3.id 
+        ORDER BY p.id DESC
+        LIMIT $items_per_page OFFSET $offset";
 $result = mysqli_query($link, $sql);
 $products = [];
 if ($result) {
@@ -744,6 +762,117 @@ if ($result) {
         .dark .submenu-link:hover {
             background-color: rgba(255, 255, 255, 0.05);
         }
+        
+        /* Pagination Styles */
+        .pagination-container {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .pagination-links {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .pagination-link, .pagination-current {
+            padding: 8px 12px;
+            text-decoration: none;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            display: inline-block;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        .pagination-link {
+            background: #ffffff;
+            color: #374151;
+            border-color: #d1d5db;
+        }
+        
+        .pagination-link:hover {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .pagination-current {
+            background: #3b82f6;
+            color: white;
+            font-weight: 600;
+            border-color: #3b82f6;
+        }
+        
+        /* Dark theme pagination */
+        .dark .pagination-link {
+            background: #374151;
+            color: #f9fafb;
+            border-color: #4b5563;
+        }
+        
+        .dark .pagination-link:hover {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .dark .pagination-current {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .pagination-disabled {
+            padding: 8px 12px;
+            background: #f3f4f6;
+            color: #9ca3af;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            font-size: 14px;
+            cursor: not-allowed;
+        }
+        
+        .dark .pagination-disabled {
+            background: #1f2937;
+            color: #6b7280;
+            border-color: #374151;
+        }
+        
+        .pagination-ellipsis {
+            padding: 8px 4px;
+            color: #6b7280;
+        }
+        
+        .dark .pagination-ellipsis {
+            color: #9ca3af;
+        }
+        
+        /* Responsive pagination */
+        @media (max-width: 768px) {
+            .pagination-container {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .pagination-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -876,10 +1005,10 @@ if ($result) {
                                     <th>Slug</th>
                                     <th>Description</th>
                                     <th>Brand</th>
-                                    <th>Category</th>
+                                    <th>Main Category</th>
+                                    <th>Sub Category 1</th>
+                                    <th>Sub Category 2</th>
                                     <th>Status</th>
-                                    <th>Created At</th>
-                                    <th>Updated At</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -897,16 +1026,16 @@ if ($result) {
                                             <td><?php echo htmlspecialchars($product['name']); ?></td>
                                             <td><?php echo htmlspecialchars($product['code']); ?></td>
                                             <td><?php echo htmlspecialchars($product['slug']); ?></td>
-                                            <td><?php echo htmlspecialchars(substr($product['description'], 0, 50)) . '...'; ?></td>
+                                            <td><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 50)) . (strlen($product['description'] ?? '') > 50 ? '...' : ''); ?></td>
                                             <td><?php echo htmlspecialchars($product['brand_name'] ?? 'No Brand'); ?></td>
-                                            <td><?php echo htmlspecialchars($product['category_name'] ?? 'No Category'); ?></td>
+                                            <td><?php echo htmlspecialchars($product['main_category_name'] ?? '-'); ?></td>
+                                            <td><?php echo htmlspecialchars($product['sub_cat_1_name'] ?? '-'); ?></td>
+                                            <td><?php echo htmlspecialchars($product['sub_cat_2_name'] ?? '-'); ?></td>
                                             <td>
                                                 <span class="status-badge <?php echo ($product['active'] == 1) ? 'status-active' : 'status-inactive'; ?>">
                                                     <?php echo ($product['active'] == 1) ? 'Active' : 'Inactive'; ?>
                                                 </span>
                                             </td>
-                                            <td><?php echo date('Y-m-d H:i:s', strtotime($product['created_at'])); ?></td>
-                                            <td><?php echo date('Y-m-d H:i:s', strtotime($product['updated_at'])); ?></td>
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)">Edit</button>
@@ -925,6 +1054,81 @@ if ($result) {
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Pagination Section -->
+                    <?php if ($total_pages > 1): ?>
+                    <div class="pagination-container">
+                        <!-- Pagination Info -->
+                        <div class="pagination-info">
+                            <?php 
+                            $start_item = ($current_page - 1) * $items_per_page + 1;
+                            $end_item = min($current_page * $items_per_page, $total_items);
+                            ?>
+                            Showing <?php echo $start_item; ?> to <?php echo $end_item; ?> of <?php echo $total_items; ?> products
+                        </div>
+                        
+                        <!-- Pagination Links -->
+                        <div class="pagination-links">
+                            <!-- Previous Button -->
+                            <?php if ($current_page > 1): ?>
+                                <a href="?page=<?php echo ($current_page - 1); ?>" class="pagination-link">
+                                    ← Previous
+                                </a>
+                            <?php else: ?>
+                                <span class="pagination-disabled">
+                                    ← Previous
+                                </span>
+                            <?php endif; ?>
+                            
+                            <!-- Page Numbers -->
+                            <?php
+                            // Calculate page range to show
+                            $start_page = max(1, $current_page - 2);
+                            $end_page = min($total_pages, $current_page + 2);
+                            
+                            // Show first page if not in range
+                            if ($start_page > 1): ?>
+                                <a href="?page=1" class="pagination-link">1</a>
+                                <?php if ($start_page > 2): ?>
+                                    <span class="pagination-ellipsis">...</span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            
+                            <!-- Page numbers in range -->
+                            <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                                <?php if ($i == $current_page): ?>
+                                    <span class="pagination-current">
+                                        <?php echo $i; ?>
+                                    </span>
+                                <?php else: ?>
+                                    <a href="?page=<?php echo $i; ?>" class="pagination-link">
+                                        <?php echo $i; ?>
+                                    </a>
+                                <?php endif; ?>
+                            <?php endfor; ?>
+                            
+                            <!-- Show last page if not in range -->
+                            <?php if ($end_page < $total_pages): ?>
+                                <?php if ($end_page < $total_pages - 1): ?>
+                                    <span class="pagination-ellipsis">...</span>
+                                <?php endif; ?>
+                                <a href="?page=<?php echo $total_pages; ?>" class="pagination-link"><?php echo $total_pages; ?></a>
+                            <?php endif; ?>
+                            
+                            <!-- Next Button -->
+                            <?php if ($current_page < $total_pages): ?>
+                                <a href="?page=<?php echo ($current_page + 1); ?>" class="pagination-link">
+                                    Next →
+                                </a>
+                            <?php else: ?>
+                                <span class="pagination-disabled">
+                                    Next →
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
                 </div>
                 </div> <!-- Close main-content-scroll -->
             </main>
@@ -1021,8 +1225,10 @@ if ($result) {
                         const slug = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
                         const description = row.querySelector('td:nth-child(6)').textContent.toLowerCase();
                         const brand = row.querySelector('td:nth-child(7)').textContent.toLowerCase();
-                        const category = row.querySelector('td:nth-child(8)').textContent.toLowerCase();
-                        const status = row.querySelector('td:nth-child(9)').textContent.toLowerCase();
+                        const mainCategory = row.querySelector('td:nth-child(8)').textContent.toLowerCase();
+                        const subCat1 = row.querySelector('td:nth-child(9)').textContent.toLowerCase();
+                        const subCat2 = row.querySelector('td:nth-child(10)').textContent.toLowerCase();
+                        const status = row.querySelector('td:nth-child(11)').textContent.toLowerCase();
                         
                         if (id.includes(searchTerm) || 
                             name.includes(searchTerm) || 
@@ -1030,7 +1236,9 @@ if ($result) {
                             slug.includes(searchTerm) || 
                             description.includes(searchTerm) || 
                             brand.includes(searchTerm) || 
-                            category.includes(searchTerm) || 
+                            mainCategory.includes(searchTerm) || 
+                            subCat1.includes(searchTerm) || 
+                            subCat2.includes(searchTerm) || 
                             status.includes(searchTerm)) {
                             row.style.display = '';
                         } else {

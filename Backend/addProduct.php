@@ -23,7 +23,8 @@ if ($brand_result) {
     }
 }
 
-$category_sql = "SELECT id, name FROM product_categories WHERE active = 1 ORDER BY name ASC";
+// Fetch categories for main category, sub category 1, and sub category 2 dropdowns
+$category_sql = "SELECT id, name, category_level FROM product_categories WHERE active = 1 ORDER BY category_level ASC, name ASC";
 $category_result = mysqli_query($link, $category_sql);
 if ($category_result) {
     while ($row = mysqli_fetch_assoc($category_result)) {
@@ -50,10 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $slug = isset($_POST['slug']) ? mysqli_real_escape_string($link, trim($_POST['slug'])) : '';
     $description = isset($_POST['description']) ? mysqli_real_escape_string($link, trim($_POST['description'])) : '';
     $brand_id = !empty($_POST['brand_id']) ? intval($_POST['brand_id']) : NULL;
-    $cat_id = !empty($_POST['cat_id']) ? intval($_POST['cat_id']) : NULL;
+    $main_cat_id = !empty($_POST['main_cat_id']) ? intval($_POST['main_cat_id']) : NULL;
+    $sub_cat_1_id = !empty($_POST['sub_cat_1_id']) ? intval($_POST['sub_cat_1_id']) : NULL;
+    $sub_cat_2_id = !empty($_POST['sub_cat_2_id']) ? intval($_POST['sub_cat_2_id']) : NULL;
     $active = isset($_POST['active']) ? intval($_POST['active']) : 1;
     
-    echo "<!-- PROCESSED VALUES: name='$name', code='$code', slug='$slug', brand_id=$brand_id, cat_id=$cat_id, active=$active -->";
+    echo "<!-- PROCESSED VALUES: name='$name', code='$code', slug='$slug', brand_id=$brand_id, main_cat_id=$main_cat_id, sub_cat_1_id=$sub_cat_1_id, sub_cat_2_id=$sub_cat_2_id, active=$active -->";
     
     // Validate required fields
     if (empty($name) || empty($code)) {
@@ -111,11 +114,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Always try to insert product (even if image upload failed)
         {
             $brand_part = ($brand_id > 0) ? $brand_id : "NULL";
-            $cat_part = ($cat_id > 0) ? $cat_id : "NULL";
+            $main_cat_part = ($main_cat_id > 0) ? $main_cat_id : "NULL";
+            $sub_cat_1_part = ($sub_cat_1_id > 0) ? $sub_cat_1_id : "NULL";
+            $sub_cat_2_part = ($sub_cat_2_id > 0) ? $sub_cat_2_id : "NULL";
             $image_part = $main_image_path ? "'$main_image_path'" : "NULL";
             
-            $sql = "INSERT INTO product2 (name, code, slug, description, image, active, brand_id, cat_id, created_at, updated_at) 
-                    VALUES ('$name', '$code', '$slug', '$description', $image_part, $active, $brand_part, $cat_part, NOW(), NOW())";
+            $sql = "INSERT INTO products (name, code, slug, description, image, active, brand_id, main_cat_id, sub_cat_1_id, sub_cat_2_id) 
+                    VALUES ('$name', '$code', '$slug', '$description', $image_part, $active, $brand_part, $main_cat_part, $sub_cat_1_part, $sub_cat_2_part)";
             
             echo "<!-- SQL QUERY: $sql -->";
             
@@ -1211,13 +1216,77 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             </div>
                             
                             <div class="form-group">
-                                <label for="cat_id">Category</label>
-                                <select id="cat_id" name="cat_id">
-                                    <option value="">Select Category</option>
+                                <label for="category_selector">Select Category (Hierarchical)</label>
+                                <select id="category_selector" name="category_selector">
+                                    <option value="">— Select a Category —</option>
+                                    <?php
+                                    // Function to display categories hierarchically (similar to addCategory.php)
+                                    function displayProductCategoriesHierarchically($link, $parent_id = null, $level = 0, $selected_id = null) {
+                                        $sql = "SELECT id, name, category_level, parent_id FROM product_categories 
+                                                WHERE active = 1 AND parent_id " . ($parent_id ? "= $parent_id" : "IS NULL") . " 
+                                                ORDER BY display_order ASC, name ASC";
+                                        $result = mysqli_query($link, $sql);
+                                        
+                                        if ($result) {
+                                            while ($row = mysqli_fetch_assoc($result)) {
+                                                $indent = str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $level);
+                                                $prefix = $level > 0 ? '├─ ' : '';
+                                                $selected = ($selected_id && $selected_id == $row['id']) ? 'selected' : '';
+                                                
+                                                echo "<option value=\"{$row['id']}\" data-level=\"{$row['category_level']}\" data-parent-id=\"{$row['parent_id']}\" $selected>";
+                                                echo $indent . $prefix . htmlspecialchars($row['name']);
+                                                echo "</option>";
+                                                
+                                                // Recursively display child categories
+                                                displayProductCategoriesHierarchically($link, $row['id'], $level + 1, $selected_id);
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Display the hierarchical categories
+                                    displayProductCategoriesHierarchically($link, null, 0, null);
+                                    ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="main_cat_id">Main Category (Auto-filled)</label>
+                                <select id="main_cat_id" name="main_cat_id" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                                    <option value="">— Will be auto-filled —</option>
                                     <?php foreach ($categories as $category): ?>
-                                        <option value="<?php echo $category['id']; ?>" <?php echo (isset($_POST['cat_id']) && $_POST['cat_id'] == $category['id']) ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($category['name']); ?>
-                                        </option>
+                                        <?php if ($category['category_level'] == 0): ?>
+                                            <option value="<?php echo $category['id']; ?>" <?php echo (isset($_POST['main_cat_id']) && $_POST['main_cat_id'] == $category['id']) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($category['name']); ?>
+                                            </option>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="sub_cat_1_id">Sub Category 1 (Auto-filled)</label>
+                                <select id="sub_cat_1_id" name="sub_cat_1_id" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                                    <option value="">— Will be auto-filled —</option>
+                                    <?php foreach ($categories as $category): ?>
+                                        <?php if ($category['category_level'] == 1): ?>
+                                            <option value="<?php echo $category['id']; ?>" <?php echo (isset($_POST['sub_cat_1_id']) && $_POST['sub_cat_1_id'] == $category['id']) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($category['name']); ?>
+                                            </option>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="sub_cat_2_id">Sub Category 2 (Auto-filled)</label>
+                                <select id="sub_cat_2_id" name="sub_cat_2_id" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                                    <option value="">— Will be auto-filled —</option>
+                                    <?php foreach ($categories as $category): ?>
+                                        <?php if ($category['category_level'] == 2): ?>
+                                            <option value="<?php echo $category['id']; ?>" <?php echo (isset($_POST['sub_cat_2_id']) && $_POST['sub_cat_2_id'] == $category['id']) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($category['name']); ?>
+                                            </option>
+                                        <?php endif; ?>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -1400,6 +1469,102 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 imagePreview.style.display = 'none';
                 previewImg.src = '';
             };
+            
+            // Category hierarchy auto-fill functionality
+            const categorySelector = document.getElementById('category_selector');
+            const mainCatSelect = document.getElementById('main_cat_id');
+            const subCat1Select = document.getElementById('sub_cat_1_id');
+            const subCat2Select = document.getElementById('sub_cat_2_id');
+            
+            if (categorySelector) {
+                categorySelector.addEventListener('change', function() {
+                    const selectedCategoryId = this.value;
+                    const selectedOption = this.options[this.selectedIndex];
+                    
+                    // Reset all category dropdowns
+                    mainCatSelect.value = '';
+                    subCat1Select.value = '';
+                    subCat2Select.value = '';
+                    
+                    if (selectedCategoryId) {
+                        const categoryLevel = parseInt(selectedOption.getAttribute('data-level'));
+                        const parentId = selectedOption.getAttribute('data-parent-id');
+                        
+                        console.log('Selected Category:', selectedCategoryId, 'Level:', categoryLevel, 'Parent:', parentId);
+                        
+                        // Set the appropriate category field based on level
+                        if (categoryLevel === 0) {
+                            // Main category selected
+                            mainCatSelect.value = selectedCategoryId;
+                        } else if (categoryLevel === 1) {
+                            // Sub category 1 selected - need to find its main category
+                            subCat1Select.value = selectedCategoryId;
+                            findAndSetParentCategory(parentId, 0, mainCatSelect);
+                        } else if (categoryLevel === 2) {
+                            // Sub category 2 selected - need to find its parents
+                            subCat2Select.value = selectedCategoryId;
+                            findAndSetParentCategory(parentId, 1, subCat1Select);
+                            // Also need to find the main category (grandparent)
+                            findParentHierarchy(selectedCategoryId);
+                        }
+                    }
+                });
+            }
+            
+            // Function to find and set parent category
+            function findAndSetParentCategory(parentId, expectedLevel, targetSelect) {
+                if (!parentId || parentId === 'NULL') return;
+                
+                // Find the parent in the hierarchical dropdown
+                for (let i = 0; i < categorySelector.options.length; i++) {
+                    const option = categorySelector.options[i];
+                    if (option.value === parentId) {
+                        const level = parseInt(option.getAttribute('data-level'));
+                        if (level === expectedLevel) {
+                            targetSelect.value = parentId;
+                        } else if (level < expectedLevel) {
+                            // Continue searching up the hierarchy
+                            const grandParentId = option.getAttribute('data-parent-id');
+                            findAndSetParentCategory(grandParentId, expectedLevel, targetSelect);
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Function to find complete parent hierarchy for level 2 categories
+            function findParentHierarchy(categoryId) {
+                // This is a more comprehensive approach to find all parents
+                const categoryData = {};
+                
+                // Build category data map from dropdown options
+                for (let i = 0; i < categorySelector.options.length; i++) {
+                    const option = categorySelector.options[i];
+                    if (option.value) {
+                        categoryData[option.value] = {
+                            level: parseInt(option.getAttribute('data-level')),
+                            parentId: option.getAttribute('data-parent-id')
+                        };
+                    }
+                }
+                
+                // Trace back to find all parents
+                let currentId = categoryId;
+                let currentData = categoryData[currentId];
+                
+                while (currentData && currentData.parentId && currentData.parentId !== 'NULL') {
+                    const parentData = categoryData[currentData.parentId];
+                    if (parentData) {
+                        if (parentData.level === 1) {
+                            subCat1Select.value = currentData.parentId;
+                        } else if (parentData.level === 0) {
+                            mainCatSelect.value = currentData.parentId;
+                        }
+                    }
+                    currentId = currentData.parentId;
+                    currentData = parentData;
+                }
+            }
 
         });
     </script>

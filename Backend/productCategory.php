@@ -12,6 +12,8 @@ if (mysqli_connect_errno()) {
 if (isset($_POST['delete_category'])) {
     $category_id = intval($_POST['delete_category']);
     
+    echo "<!-- DEBUG: Attempting to delete category ID: $category_id -->";
+    
     // First get the image path to delete the file
     $get_image_sql = "SELECT image FROM product_categories WHERE id = $category_id";
     $image_result = mysqli_query($link, $get_image_sql);
@@ -19,23 +21,52 @@ if (isset($_POST['delete_category'])) {
         $image_path = "../" . $image_row['image'];
         if (file_exists($image_path) && !empty($image_row['image'])) {
             unlink($image_path); // Delete the image file
+            echo "<!-- DEBUG: Image deleted: $image_path -->";
         }
     }
     
-    // Soft delete from database (set deleted_at timestamp)
-    $delete_sql = "UPDATE product_categories SET deleted_at = NOW() WHERE id = $category_id";
-    if (mysqli_query($link, $delete_sql)) {
-        echo "<script>alert('Category deleted successfully!'); window.location.href='productCategory.php';</script>";
+    // Use simple hard delete (most reliable)
+    $delete_sql = "DELETE FROM product_categories WHERE id = $category_id";
+    echo "<!-- DEBUG: Executing SQL: $delete_sql -->";
+    
+    $delete_result = mysqli_query($link, $delete_sql);
+    
+    if ($delete_result) {
+        $affected_rows = mysqli_affected_rows($link);
+        echo "<!-- DEBUG: Delete result: SUCCESS, Affected rows: $affected_rows -->";
+        
+        if ($affected_rows > 0) {
+            echo "<script>alert('Category deleted successfully! ($affected_rows row(s) affected)'); window.location.href='productCategory.php';</script>";
+        } else {
+            echo "<script>alert('No category found with ID $category_id to delete.'); window.location.href='productCategory.php';</script>";
+        }
     } else {
-        echo "<script>alert('Error deleting category: " . mysqli_error($link) . "');</script>";
+        $error = mysqli_error($link);
+        echo "<!-- DEBUG: Delete failed with error: $error -->";
+        echo "<script>alert('Error deleting category: $error'); window.location.href='productCategory.php';</script>";
     }
 }
 
-// Fetch category data from database (using product_categories table)
+// Pagination setup
+$items_per_page = 10;
+$current_page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset = ($current_page - 1) * $items_per_page;
+
+// Get total count of categories for pagination
+$count_sql = "SELECT COUNT(*) as total FROM product_categories";
+$count_result = mysqli_query($link, $count_sql);
+$total_items = 0;
+if ($count_result) {
+    $count_row = mysqli_fetch_assoc($count_result);
+    $total_items = $count_row['total'];
+}
+$total_pages = ceil($total_items / $items_per_page);
+
+// Fetch category data with pagination
 $sql = "SELECT id, name, description, parent_id, category_level, image, active, display_order, user_id, created_at, updated_at 
         FROM product_categories 
-        WHERE deleted_at IS NULL 
-        ORDER BY display_order ASC, created_at DESC";
+        ORDER BY id ASC
+        LIMIT $items_per_page OFFSET $offset";
 $result = mysqli_query($link, $sql);
 $categories = [];
 if ($result) {
@@ -789,6 +820,72 @@ if ($result) {
         .dark .submenu-link:hover {
             background-color: rgba(255, 255, 255, 0.05);
         }
+
+        /* Pagination Styles */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.5rem;
+            padding: 1rem 0;
+        }
+        
+        .pagination-info {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .dark .pagination-info {
+            color: #9ca3af;
+        }
+        
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .pagination a, .pagination span {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-light);
+            border-radius: 0.375rem;
+            text-decoration: none;
+            color: var(--text-light);
+            background-color: var(--card-bg-light);
+            transition: all 0.3s ease;
+            font-size: 0.875rem;
+            min-width: 2.5rem;
+            text-align: center;
+        }
+        
+        .pagination a:hover {
+            background-color: var(--indigo-600);
+            color: white;
+            border-color: var(--indigo-600);
+        }
+        
+        .pagination .current {
+            background-color: var(--indigo-600);
+            color: white;
+            border-color: var(--indigo-600);
+            font-weight: 600;
+        }
+        
+        .pagination .disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        .pagination .ellipsis {
+            border: none;
+            background: none;
+            color: #6b7280;
+        }
+        
+        .dark .pagination .ellipsis {
+            color: #9ca3af;
+        }
     </style>
 </head>
 <body>
@@ -990,6 +1087,71 @@ if ($result) {
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Pagination -->
+                    <?php if ($total_pages > 1): ?>
+                    <div class="pagination-container">
+                        <div class="pagination-info">
+                            Showing <?php echo (($current_page - 1) * $items_per_page) + 1; ?> to 
+                            <?php echo min($current_page * $items_per_page, $total_items); ?> of 
+                            <?php echo $total_items; ?> categories
+                        </div>
+                        
+                        <div class="pagination">
+                            <!-- Previous Button -->
+                            <?php if ($current_page > 1): ?>
+                                <a href="?page=<?php echo $current_page - 1; ?>" title="Previous Page">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                                </a>
+                            <?php else: ?>
+                                <span class="disabled">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                                </span>
+                            <?php endif; ?>
+                            
+                            <!-- Page Numbers -->
+                            <?php
+                            $start_page = max(1, $current_page - 2);
+                            $end_page = min($total_pages, $current_page + 2);
+                            
+                            // Show first page if not in range
+                            if ($start_page > 1): ?>
+                                <a href="?page=1">1</a>
+                                <?php if ($start_page > 2): ?>
+                                    <span class="ellipsis">...</span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            
+                            <!-- Page number range -->
+                            <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                                <?php if ($i == $current_page): ?>
+                                    <span class="current"><?php echo $i; ?></span>
+                                <?php else: ?>
+                                    <a href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                <?php endif; ?>
+                            <?php endfor; ?>
+                            
+                            <!-- Show last page if not in range -->
+                            <?php if ($end_page < $total_pages): ?>
+                                <?php if ($end_page < $total_pages - 1): ?>
+                                    <span class="ellipsis">...</span>
+                                <?php endif; ?>
+                                <a href="?page=<?php echo $total_pages; ?>"><?php echo $total_pages; ?></a>
+                            <?php endif; ?>
+                            
+                            <!-- Next Button -->
+                            <?php if ($current_page < $total_pages): ?>
+                                <a href="?page=<?php echo $current_page + 1; ?>" title="Next Page">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                                </a>
+                            <?php else: ?>
+                                <span class="disabled">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
                 </div> <!-- Close main-content-scroll -->
             </main>

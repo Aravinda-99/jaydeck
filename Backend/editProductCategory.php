@@ -19,8 +19,8 @@ if ($category_id <= 0) {
     exit();
 }
 
-// Fetch existing category data
-$sql = "SELECT * FROM product_category WHERE id = $category_id";
+// Fetch existing category data from product_categories table
+$sql = "SELECT * FROM product_categories WHERE id = $category_id AND deleted_at IS NULL";
 $result = mysqli_query($link, $sql);
 if ($result && mysqli_num_rows($result) > 0) {
     $category = mysqli_fetch_assoc($result);
@@ -33,65 +33,96 @@ if ($result && mysqli_num_rows($result) > 0) {
 if (isset($_POST['update_category']) && $category) {
     $name = mysqli_real_escape_string($link, trim($_POST['name']));
     $description = mysqli_real_escape_string($link, trim($_POST['description']));
+    $parent_id = isset($_POST['parent_id']) && !empty($_POST['parent_id']) ? intval($_POST['parent_id']) : null;
+    $active = isset($_POST['active']) ? intval($_POST['active']) : 1;
     $display_order = !empty($_POST['display_order']) ? intval($_POST['display_order']) : 0;
     $updateImage = false;
     $newImagePath = $category['image']; // Keep existing image by default
+    
+    // ---- AUTOMATIC CATEGORY LEVEL CALCULATION ----
+    $category_level = 0; // Default to 0 for main categories
+    if ($parent_id !== null) {
+        // If a parent is selected, fetch its level and add 1
+        $parent_sql = "SELECT category_level FROM product_categories WHERE id = ?";
+        $stmt_parent = mysqli_prepare($link, $parent_sql);
+        mysqli_stmt_bind_param($stmt_parent, "i", $parent_id);
+        mysqli_stmt_execute($stmt_parent);
+        $parent_result = mysqli_stmt_get_result($stmt_parent);
+        
+        if ($parent_row = mysqli_fetch_assoc($parent_result)) {
+            $category_level = $parent_row['category_level'] + 1;
+        } else {
+            // If parent ID is invalid for some reason, treat as a main category
+            $parent_id = null; 
+        }
+        mysqli_stmt_close($stmt_parent);
+    }
+    // ---- END OF AUTOMATIC CALCULATION ----
     
     // Validate required fields
     if (empty($name)) {
         $message = 'Category name is required!';
         $messageType = 'error';
     } else {
-        // Handle file upload if new image is provided
+        // Handle image upload (using same logic as addCategory.php)
+        echo "<!-- DEBUG: Checking file upload - isset: " . (isset($_FILES['category_image']) ? 'yes' : 'no') . ", error: " . ($_FILES['category_image']['error'] ?? 'none') . ", name: '" . ($_FILES['category_image']['name'] ?? 'none') . "' -->";
         if (isset($_FILES['category_image']) && $_FILES['category_image']['error'] === UPLOAD_ERR_OK) {
+            echo "<!-- DEBUG: File upload condition met, processing upload -->";
             $uploadDir = '../assets/uploads/categories/main_image/';
-            
-            // Create directory if it doesn't exist
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
-            
             $fileName = time() . '_' . basename($_FILES['category_image']['name']);
             $targetPath = $uploadDir . $fileName;
-            $dbPath = 'assets/uploads/categories/main_image/' . $fileName;
             
-            // Check if file is an image
             $imageFileType = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
             $allowedTypes = array('jpg', 'jpeg', 'png', 'gif');
             
-            if (in_array($imageFileType, $allowedTypes)) {
-                if (move_uploaded_file($_FILES['category_image']['tmp_name'], $targetPath)) {
-                    // Delete old image file
-                    $oldImagePath = '../' . $category['image'];
-                    if (file_exists($oldImagePath) && !empty($category['image'])) {
-                        unlink($oldImagePath);
-                    }
-                    $newImagePath = $dbPath;
-                    $updateImage = true;
-                } else {
-                    $message = 'Error uploading new image.';
-                    $messageType = 'error';
+            if (in_array($imageFileType, $allowedTypes) && move_uploaded_file($_FILES['category_image']['tmp_name'], $targetPath)) {
+                echo "<!-- DEBUG: File uploaded successfully to: '$targetPath' -->";
+                // Delete old image file if exists
+                $oldImagePath = '../' . $category['image'];
+                if (file_exists($oldImagePath) && !empty($category['image'])) {
+                    unlink($oldImagePath);
+                    echo "<!-- DEBUG: Old image deleted: '$oldImagePath' -->";
                 }
+                // Set new image path (same format as addCategory.php)
+                $newImagePath = 'assets/uploads/categories/main_image/' . $fileName;
+                $updateImage = true;
+                echo "<!-- DEBUG: New image path set to: '$newImagePath' -->";
             } else {
-                $message = 'Only JPG, JPEG, PNG, and GIF files are allowed.';
+                $message = 'There was an error uploading your file or the file type is not allowed.';
                 $messageType = 'error';
             }
         }
         
         // Update database if no errors
         if (empty($message)) {
-            $sql = "UPDATE product_category SET 
-                    name = '$name', 
-                    description = '$description', 
-                    image = '$newImagePath', 
-                    display_order = $display_order 
-                    WHERE id = $category_id";
+            // DEBUG: Log values before database update
+            echo "<!-- DEBUG: About to update DB with image path: '" . htmlspecialchars($newImagePath) . "' -->";
+            echo "<!-- DEBUG: Update image flag: " . ($updateImage ? 'true' : 'false') . " -->";
             
-            if (mysqli_query($link, $sql)) {
+            // Use prepared statements for security
+            $parent_id_part = $parent_id ? $parent_id : null;
+            $sql = "UPDATE product_categories SET 
+                    name = ?, 
+                    description = ?, 
+                    parent_id = ?, 
+                    category_level = ?, 
+                    image = ?, 
+                    active = ?, 
+                    display_order = ?, 
+                    updated_at = NOW() 
+                    WHERE id = ?";
+            
+            $stmt = mysqli_prepare($link, $sql);
+            mysqli_stmt_bind_param($stmt, "ssiisiii", $name, $description, $parent_id_part, $category_level, $newImagePath, $active, $display_order, $category_id);
+            
+            if (mysqli_stmt_execute($stmt)) {
                 $message = 'Category updated successfully!';
                 $messageType = 'success';
                 // Refresh category data
-                $sql = "SELECT * FROM product_category WHERE id = $category_id";
+                $sql = "SELECT * FROM product_categories WHERE id = $category_id AND deleted_at IS NULL";
                 $result = mysqli_query($link, $sql);
                 if ($result && mysqli_num_rows($result) > 0) {
                     $category = mysqli_fetch_assoc($result);
@@ -100,6 +131,7 @@ if (isset($_POST['update_category']) && $category) {
                 $message = 'Error updating category: ' . mysqli_error($link);
                 $messageType = 'error';
             }
+            mysqli_stmt_close($stmt);
         }
     }
 }
@@ -841,6 +873,61 @@ if (isset($_POST['update_category']) && $category) {
                             </div>
                             
                             <div class="form-group">
+                                <label for="parent_id">Parent Category</label>
+                                <select id="parent_id" name="parent_id">
+                                    <option value="">— None (This is a Main Category) —</option>
+                                    <?php
+                                    // Function to display categories hierarchically (excluding current category and its children)
+                                    function displayEditCategoriesHierarchically($link, $current_id, $parent_id = null, $level = 0, $selected_id = null) {
+                                        $sql = "SELECT id, name, category_level FROM product_categories 
+                                                WHERE deleted_at IS NULL AND id != $current_id AND parent_id " . ($parent_id ? "= $parent_id" : "IS NULL") . " 
+                                                ORDER BY display_order ASC, name ASC";
+                                        $result = mysqli_query($link, $sql);
+                                        
+                                        if ($result) {
+                                            while ($row = mysqli_fetch_assoc($result)) {
+                                                // Skip if this would create a circular reference
+                                                $indent = str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $level);
+                                                $prefix = $level > 0 ? '├─ ' : '';
+                                                $selected = ($selected_id && $selected_id == $row['id']) ? 'selected' : '';
+                                                
+                                                echo "<option value=\"{$row['id']}\" data-level=\"{$row['category_level']}\" $selected>";
+                                                echo $indent . $prefix . htmlspecialchars($row['name']);
+                                                echo "</option>";
+                                                
+                                                // Recursively display child categories
+                                                displayEditCategoriesHierarchically($link, $current_id, $row['id'], $level + 1, $selected_id);
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Display the hierarchical categories
+                                    displayEditCategoriesHierarchically($link, $category_id, null, 0, $category['parent_id']);
+                                    ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="category_level_display">Category Level (Automatic)</label>
+                                <input type="text" id="category_level_display" value="<?php 
+                                    switch($category['category_level']) {
+                                        case 0: echo 'Main Category (Level 0)'; break;
+                                        case 1: echo 'Sub-Category (Level 1)'; break;
+                                        case 2: echo 'Sub-Category (Level 2)'; break;
+                                        default: echo 'Level ' . $category['category_level'];
+                                    }
+                                ?>" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="active">Status</label>
+                                <select id="active" name="active">
+                                    <option value="1" <?php echo ($category['active'] == 1) ? 'selected' : ''; ?>>Active</option>
+                                    <option value="0" <?php echo ($category['active'] == 0) ? 'selected' : ''; ?>>Inactive</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
                                 <label for="display_order">Display Order</label>
                                 <input type="number" id="display_order" name="display_order" placeholder="Enter display order..." value="<?php echo htmlspecialchars($category['display_order']); ?>" min="0">
                             </div>
@@ -1032,6 +1119,27 @@ if (isset($_POST['update_category']) && $category) {
                 imagePreview.style.display = 'none';
                 previewImg.src = '';
             };
+            
+            // --- UPDATED JAVASCRIPT FOR AUTOMATIC LEVEL DISPLAY ---
+            const parentSelect = document.getElementById('parent_id');
+            const levelDisplay = document.getElementById('category_level_display');
+            
+            function updateLevelDisplay() {
+                const selectedOption = parentSelect.options[parentSelect.selectedIndex];
+                
+                if (!parentSelect.value) { // No parent selected
+                    levelDisplay.value = 'Main Category (Level 0)';
+                } else {
+                    const parentLevel = parseInt(selectedOption.getAttribute('data-level'));
+                    const newLevel = parentLevel + 1;
+                    levelDisplay.value = `Sub-Category (Level ${newLevel})`;
+                }
+            }
+
+            if (parentSelect && levelDisplay) {
+                parentSelect.addEventListener('change', updateLevelDisplay);
+                updateLevelDisplay(); // Call on page load
+            }
 
         });
     </script>
