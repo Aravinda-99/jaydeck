@@ -1,19 +1,19 @@
 
 <?php
 // Database connection
-$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
     exit();
 }
 
-// Handle slider deletion
-if (isset($_POST['delete_slider'])) {
-    $slider_id = intval($_POST['delete_slider']);
+// Handle product deletion
+if (isset($_POST['delete_product'])) {
+    $product_id = intval($_POST['delete_product']);
     
     // First get the image path to delete the file
-    $get_image_sql = "SELECT image FROM slider WHERE id = $slider_id";
+    $get_image_sql = "SELECT image FROM products WHERE id = $product_id";
     $image_result = mysqli_query($link, $get_image_sql);
     if ($image_result && $image_row = mysqli_fetch_assoc($image_result)) {
         $image_path = "../" . $image_row['image'];
@@ -23,21 +23,24 @@ if (isset($_POST['delete_slider'])) {
     }
     
     // Delete from database
-    $delete_sql = "DELETE FROM slider WHERE id = $slider_id";
+    $delete_sql = "DELETE FROM products WHERE id = $product_id";
     if (mysqli_query($link, $delete_sql)) {
-        echo "<script>alert('Slider deleted successfully!'); window.location.href='Allslider.php';</script>";
+        echo "<script>alert('Product deleted successfully!'); window.location.href='allProduct.php';</script>";
     } else {
-        echo "<script>alert('Error deleting slider: " . mysqli_error($link) . "');</script>";
+        echo "<script>alert('Error deleting product: " . mysqli_error($link) . "');</script>";
     }
 }
 
-// Fetch slider data from database
-$sql = "SELECT * FROM slider ORDER BY created_at DESC";
+// Fetch product data from database with brand information
+$sql = "SELECT p.id, p.name, p.code, p.slug, p.description, p.image, p.active, p.brand_id, p.created_at, p.updated_at, b.name as brand_name 
+        FROM product2 p 
+        LEFT JOIN brands b ON p.brand_id = b.id 
+        ORDER BY p.created_at DESC";
 $result = mysqli_query($link, $sql);
-$sliders = [];
+$products = [];
 if ($result) {
     while ($row = mysqli_fetch_assoc($result)) {
-        $sliders[] = $row;
+        $products[] = $row;
     }
 }
 ?>
@@ -46,7 +49,7 @@ if ($result) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Sliders - Modern Admin Panel</title>
+    <title>All Products - Modern Admin Panel</title>
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -826,13 +829,13 @@ if ($result) {
             <main class="main-area">
                 <!-- Header for Desktop View -->
                 <div class="main-header">
-                    <h2>All Sliders</h2>
+                    <h2>All Products</h2>
                     
                     <!-- Search Bar -->
                     <div class="search-container">
                         <div class="search-input-wrapper">
                             <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" class="search-input" placeholder="Search sliders..." id="searchInput">
+                            <input type="text" class="search-input" placeholder="Search products by name, code or brand..." id="searchInput">
                         </div>
                     </div>
                     
@@ -850,13 +853,13 @@ if ($result) {
                 
                 <!-- Scrollable Content Area -->
                 <div class="main-content-scroll">
-                    <!-- All Slider Table -->
+                    <!-- All Products Table -->
                 <div class="slider-table-container">
                     <div class="slider-table-header">
-                        <h3>Slider Management</h3>
-                        <a href="addSlider.php" class="add-slider-btn">
+                        <h3>Product Management</h3>
+                        <a href="addProduct.php" class="add-slider-btn">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                            Add New Slider
+                            Add New Product
                         </a>
                     </div>
                     
@@ -866,42 +869,52 @@ if ($result) {
                                 <tr>
                                     <th>ID</th>
                                     <th>Image</th>
+                                    <th>Name</th>
+                                    <th>Code</th>
+                                    <th>Slug</th>
                                     <th>Description</th>
+                                    <th>Brand</th>
                                     <th>Status</th>
-                                    <th>Created Date</th>
+                                    <th>Created At</th>
+                                    <th>Updated At</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if (!empty($sliders)): ?>
-                                    <?php foreach ($sliders as $index => $slider): ?>
+                                <?php if (!empty($products)): ?>
+                                    <?php foreach ($products as $index => $product): ?>
                                         <tr>
-                                            <td><?php echo $slider['id']; ?></td>
+                                            <td><?php echo $product['id']; ?></td>
                                             <td>
-                                                <img src="../<?php echo htmlspecialchars($slider['image']); ?>" 
-                                                     alt="<?php echo htmlspecialchars($slider['description'] ?? 'Slider ' . ($index + 1)); ?>" 
+                                                <img src="../<?php echo htmlspecialchars($product['image']); ?>" 
+                                                     alt="<?php echo htmlspecialchars($product['name']); ?>" 
                                                      class="slider-image"
                                                      onerror="this.src='https://placehold.co/60x40/6366f1/ffffff?text=IMG'">
                                             </td>
-                                            <td><?php echo htmlspecialchars($slider['description'] ?? 'No Description'); ?></td>
+                                            <td><?php echo htmlspecialchars($product['name']); ?></td>
+                                            <td><?php echo htmlspecialchars($product['code']); ?></td>
+                                            <td><?php echo htmlspecialchars($product['slug']); ?></td>
+                                            <td><?php echo htmlspecialchars(substr($product['description'], 0, 50)) . '...'; ?></td>
+                                            <td><?php echo htmlspecialchars($product['brand_name'] ?? 'No Brand'); ?></td>
                                             <td>
-                                                <span class="status-badge <?php echo ($slider['status'] === 'active') ? 'status-active' : 'status-inactive'; ?>">
-                                                    <?php echo ucfirst($slider['status'] ?? 'inactive'); ?>
+                                                <span class="status-badge <?php echo ($product['active'] == 1) ? 'status-active' : 'status-inactive'; ?>">
+                                                    <?php echo ($product['active'] == 1) ? 'Active' : 'Inactive'; ?>
                                                 </span>
                                             </td>
-                                            <td><?php echo date('Y-m-d', strtotime($slider['created_at'])); ?></td>
+                                            <td><?php echo date('Y-m-d H:i:s', strtotime($product['created_at'])); ?></td>
+                                            <td><?php echo date('Y-m-d H:i:s', strtotime($product['updated_at'])); ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="btn-edit" onclick="editSlider(<?php echo $slider['id']; ?>)">Edit</button>
-                                                    <button class="btn-delete" onclick="deleteSlider(<?php echo $slider['id']; ?>)">Delete</button>
+                                                    <button class="btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)">Edit</button>
+                                                    <button class="btn-delete" onclick="deleteProduct(<?php echo $product['id']; ?>)">Delete</button>
                                                 </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="6" style="text-align: center; padding: 2rem; color: #6b7280;">
-                                            No sliders found. <a href="slider.php" style="color: var(--indigo-600);">Add your first slider</a>
+                                        <td colspan="11" style="text-align: center; padding: 2rem; color: #6b7280;">
+                                            No products found. <a href="addProduct.php" style="color: var(--indigo-600);">Add your first product</a>
                                         </td>
                                     </tr>
                                 <?php endif; ?>
@@ -999,10 +1012,20 @@ if ($result) {
                     
                     tableRows.forEach(row => {
                         const id = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
-                        const description = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
-                        const status = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                        const name = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                        const code = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                        const slug = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+                        const description = row.querySelector('td:nth-child(6)').textContent.toLowerCase();
+                        const brand = row.querySelector('td:nth-child(7)').textContent.toLowerCase();
+                        const status = row.querySelector('td:nth-child(8)').textContent.toLowerCase();
                         
-                        if (id.includes(searchTerm) || description.includes(searchTerm) || status.includes(searchTerm)) {
+                        if (id.includes(searchTerm) || 
+                            name.includes(searchTerm) || 
+                            code.includes(searchTerm) || 
+                            slug.includes(searchTerm) || 
+                            description.includes(searchTerm) || 
+                            brand.includes(searchTerm) || 
+                            status.includes(searchTerm)) {
                             row.style.display = '';
                         } else {
                             row.style.display = 'none';
@@ -1019,24 +1042,24 @@ if ($result) {
                 });
             }
 
-            // Edit slider function
-            window.editSlider = function(sliderId) {
-                // Redirect to edit page with slider ID
-                window.location.href = 'editSlider.php?id=' + sliderId;
+            // Edit product function
+            window.editProduct = function(productId) {
+                // Redirect to edit page with product ID
+                window.location.href = 'editProduct.php?id=' + productId;
             };
 
-            // Delete slider function
-            window.deleteSlider = function(sliderId) {
-                if (confirm('Are you sure you want to delete this slider?')) {
+            // Delete product function
+            window.deleteProduct = function(productId) {
+                if (confirm('Are you sure you want to delete this product?')) {
                     // Create form and submit for deletion
                     const form = document.createElement('form');
                     form.method = 'POST';
-                    form.action = 'Allslider.php';
+                    form.action = 'allProduct.php';
                     
                     const input = document.createElement('input');
                     input.type = 'hidden';
-                    input.name = 'delete_slider';
-                    input.value = sliderId;
+                    input.name = 'delete_product';
+                    input.value = productId;
                     
                     form.appendChild(input);
                     document.body.appendChild(form);

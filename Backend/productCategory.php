@@ -1,7 +1,7 @@
 
 <?php
 // Database connection
-$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -901,7 +901,7 @@ if ($result) {
                 <div class="category-table-container">
                     <div class="category-table-header">
                         <h3>Category Management</h3>
-                        <a href="../admin/categories/create" class="add-category-btn">
+                        <a href="addCategory.php" class="add-category-btn">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             Add New Category
                         </a>
