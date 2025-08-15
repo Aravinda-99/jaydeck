@@ -10,94 +10,82 @@ if (mysqli_connect_errno()) {
 $message = '';
 $messageType = '';
 
-// Debug: Always show what we received
-echo "<!-- DEBUG: POST METHOD: " . $_SERVER['REQUEST_METHOD'] . " -->";
-echo "<!-- DEBUG: POST KEYS: " . implode(', ', array_keys($_POST)) . " -->";
-
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
-    echo "<!-- FORM SUBMITTED: YES -->";
-    echo "<!-- POST DATA: " . htmlspecialchars(print_r($_POST, true)) . " -->";
     
-    // Get form data (only fields that exist in your DB)
+    // Get form data
     $name = isset($_POST['name']) ? trim($_POST['name']) : '';
     $description = isset($_POST['description']) ? trim($_POST['description']) : '';
+    $parent_id = isset($_POST['parent_id']) && !empty($_POST['parent_id']) ? intval($_POST['parent_id']) : null;
+    $active = isset($_POST['active']) ? intval($_POST['active']) : 1;
     $display_order = isset($_POST['display_order']) ? intval($_POST['display_order']) : 0;
-    
-    echo "<!-- RAW VALUES: name='$name', desc='$description', order=$display_order -->";
-    
-    // Validate required fields
+    $user_id = 1; // Default user ID
+
+    // ---- AUTOMATIC CATEGORY LEVEL CALCULATION ----
+    $category_level = 0; // Default to 0 for main categories
+    if ($parent_id !== null) {
+        // If a parent is selected, fetch its level and add 1
+        $parent_sql = "SELECT category_level FROM product_categories WHERE id = ?";
+        $stmt_parent = mysqli_prepare($link, $parent_sql);
+        mysqli_stmt_bind_param($stmt_parent, "i", $parent_id);
+        mysqli_stmt_execute($stmt_parent);
+        $parent_result = mysqli_stmt_get_result($stmt_parent);
+        
+        if ($parent_row = mysqli_fetch_assoc($parent_result)) {
+            $category_level = $parent_row['category_level'] + 1;
+        } else {
+            // If parent ID is invalid for some reason, treat as a main category
+            $parent_id = null; 
+        }
+        mysqli_stmt_close($stmt_parent);
+    }
+    // ---- END OF AUTOMATIC CALCULATION ----
+
     if (empty($name)) {
         $message = 'Category name is required!';
         $messageType = 'error';
-        echo "<!-- VALIDATION ERROR: Name is empty -->";
     } else {
-        $main_image_path = NULL; // Default to NULL if no image
+        $main_image_path = NULL;
         
         // Handle image upload
         if (isset($_FILES['category_image']) && $_FILES['category_image']['error'] === UPLOAD_ERR_OK) {
-            echo "<!-- FILE UPLOAD: Processing category image -->";
             $uploadDir = '../assets/uploads/categories/main_image/';
-            
-            // Create directory if it doesn't exist
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
-                echo "<!-- DIRECTORY CREATED: $uploadDir -->";
             }
-            
             $fileName = time() . '_' . basename($_FILES['category_image']['name']);
             $targetPath = $uploadDir . $fileName;
-            $main_image_path = 'assets/uploads/categories/main_image/' . $fileName;
             
-            echo "<!-- FILE PATH: $main_image_path -->";
-            
-            // Check if file is an image
             $imageFileType = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
             $allowedTypes = array('jpg', 'jpeg', 'png', 'gif');
             
-            if (in_array($imageFileType, $allowedTypes)) {
-                if (!move_uploaded_file($_FILES['category_image']['tmp_name'], $targetPath)) {
-                    echo "<!-- FILE UPLOAD ERROR -->";
-                    $main_image_path = NULL;
-                } else {
-                    echo "<!-- FILE UPLOADED SUCCESSFULLY -->";
-                }
+            if (in_array($imageFileType, $allowedTypes) && move_uploaded_file($_FILES['category_image']['tmp_name'], $targetPath)) {
+                $main_image_path = 'assets/uploads/categories/main_image/' . $fileName;
             } else {
-                echo "<!-- FILE TYPE ERROR -->";
-                $main_image_path = NULL;
+                 $message = 'There was an error uploading your file or the file type is not allowed.';
+                 $messageType = 'error';
             }
-        } else {
-            echo "<!-- NO IMAGE UPLOADED -->";
         }
         
-        // Escape data for database
-        $name_escaped = mysqli_real_escape_string($link, $name);
-        $description_escaped = mysqli_real_escape_string($link, $description);
-        $image_part = $main_image_path ? "'$main_image_path'" : "NULL";
-        
-        // SQL for your simplified table structure (only 5 columns)
-        $sql = "INSERT INTO product_category (name, description, image, display_order) VALUES ('$name_escaped', '$description_escaped', $image_part, $display_order)";
-        
-        echo "<!-- SQL QUERY: $sql -->";
-        
-        if (mysqli_query($link, $sql)) {
-            $category_id = mysqli_insert_id($link);
-            $message = 'Category added successfully! ID: ' . $category_id;
-            $messageType = 'success';
-            echo "<!-- DATABASE INSERT: SUCCESS - ID: $category_id -->";
+        if ($messageType !== 'error') {
+            // Use prepared statements to prevent SQL injection
+            $sql = "INSERT INTO product_categories (name, description, parent_id, category_level, image, active, display_order, user_id, created_at, updated_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
             
-            // Clear form data on success
-            $_POST = array();
-        } else {
-            $message = 'Database error: ' . mysqli_error($link);
-            $messageType = 'error';
-            echo "<!-- DATABASE ERROR: " . mysqli_error($link) . " -->";
+            $stmt = mysqli_prepare($link, $sql);
+            // Bind parameters: s=string, i=integer
+            mysqli_stmt_bind_param($stmt, "ssiisiii", $name, $description, $parent_id, $category_level, $main_image_path, $active, $display_order, $user_id);
+            
+            if (mysqli_stmt_execute($stmt)) {
+                $message = 'Category added successfully!';
+                $messageType = 'success';
+                $_POST = array(); // Clear form data on success
+            } else {
+                $message = 'Database error: ' . mysqli_error($link);
+                $messageType = 'error';
+            }
+            mysqli_stmt_close($stmt);
         }
-    }
-} else {
-    echo "<!-- FORM NOT SUBMITTED - Method: " . $_SERVER['REQUEST_METHOD'] . " -->";
-    if (!isset($_POST['add_category'])) {
-        echo "<!-- add_category button not found in POST -->";
     }
 }
 ?>
@@ -108,7 +96,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Category - Modern Admin Panel</title>
     
-    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -692,7 +679,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
 <body>
 
     <div class="admin-panel">
-        <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-logo">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.37 3.63a2.12 2.12 0 1 1 3 3L12 16l-4 1 1-4Z"/></svg>
@@ -704,20 +690,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span>Dashboard</span>
                 </a>
-                <a href="#" class="nav-link">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span>Users</span>
-                </a>
-                <a href="#" class="nav-link">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                    <span>Analytics</span>
-                </a>
-                <a href="#" class="nav-link">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
-                    <span>Settings</span>
-                </a>
                 
-                <!-- Slider Menu with Sub-menu -->
                 <div class="nav-item has-submenu">
                     <a href="#" class="nav-link submenu-toggle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
@@ -730,7 +703,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                     </ul>
                 </div>
                 
-                <!-- Product Menu with Sub-menu -->
                 <div class="nav-item has-submenu active">
                     <a href="#" class="nav-link submenu-toggle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
@@ -755,7 +727,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
         </aside>
 
         <div class="main-content">
-            <!-- Header for Mobile View -->
             <header class="mobile-header">
                 <button id="menu-toggle" class="menu-toggle">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
@@ -772,7 +743,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
             </header>
 
             <main class="main-area">
-                <!-- Header for Desktop View -->
                 <div class="main-header">
                     <h2>Add New Category</h2>
                     
@@ -788,12 +758,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                     </div>
                 </div>
                 
-                <!-- Scrollable Content Area -->
                 <div class="main-content-scroll">
-                    <!-- Add Category Form -->
                     <div class="form-container">
                         <div class="form-header">
-                            <h3>Add New Category</h3>
+                            <h3>Category Details</h3>
                             <a href="productCategory.php" class="view-all-btn">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                                 Back to All Categories
@@ -815,6 +783,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                             <div class="form-group">
                                 <label for="description">Description</label>
                                 <textarea id="description" name="description" rows="4" placeholder="Enter category description..."><?php echo isset($_POST['description']) ? htmlspecialchars($_POST['description']) : ''; ?></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="parent_id">Parent Category</label>
+                                <select id="parent_id" name="parent_id">
+                                    <option value="">— None (This is a Main Category) —</option>
+                                    <?php
+                                    // Function to display categories hierarchically
+                                    function displayCategoriesHierarchically($link, $parent_id = null, $level = 0, $selected_id = null) {
+                                        $sql = "SELECT id, name, category_level FROM product_categories 
+                                                WHERE deleted_at IS NULL AND parent_id " . ($parent_id ? "= $parent_id" : "IS NULL") . " 
+                                                ORDER BY display_order ASC, name ASC";
+                                        $result = mysqli_query($link, $sql);
+                                        
+                                        if ($result) {
+                                            while ($row = mysqli_fetch_assoc($result)) {
+                                                $indent = str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $level);
+                                                $prefix = $level > 0 ? '├─ ' : '';
+                                                $selected = ($selected_id && $selected_id == $row['id']) ? 'selected' : '';
+                                                
+                                                echo "<option value=\"{$row['id']}\" data-level=\"{$row['category_level']}\" $selected>";
+                                                echo $indent . $prefix . htmlspecialchars($row['name']);
+                                                echo "</option>";
+                                                
+                                                // Recursively display child categories
+                                                displayCategoriesHierarchically($link, $row['id'], $level + 1, $selected_id);
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Display the hierarchical categories
+                                    $selected_parent_id = isset($_POST['parent_id']) ? $_POST['parent_id'] : null;
+                                    displayCategoriesHierarchically($link, null, 0, $selected_parent_id);
+                                    ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="category_level_display">Category Level (Automatic)</label>
+                                <input type="text" id="category_level_display" value="Main Category (Level 0)" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="active">Status</label>
+                                <select id="active" name="active">
+                                    <option value="1" <?php echo (!isset($_POST['active']) || (isset($_POST['active']) && $_POST['active'] == 1)) ? 'selected' : ''; ?>>Active</option>
+                                    <option value="0" <?php echo (isset($_POST['active']) && $_POST['active'] == 0) ? 'selected' : ''; ?>>Inactive</option>
+                                </select>
                             </div>
                             
                             <div class="form-group">
@@ -841,14 +857,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                             <div class="form-actions">
                                 <button type="button" class="btn-cancel" onclick="window.location.href='productCategory.php'">Cancel</button>
                                 <button type="submit" name="add_category" class="btn-submit">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
                                     Add Category
                                 </button>
                             </div>
                         </form>
                     </div>
-                </div> <!-- Close main-content-scroll -->
-            </main>
+                </div> </main>
         </div>
     </div>
     
@@ -914,16 +929,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                 toggle.addEventListener('click', function(e) {
                     e.preventDefault();
                     const navItem = this.closest('.nav-item');
-                    const isActive = navItem.classList.contains('active');
                     
-                    // Close all other submenus
                     document.querySelectorAll('.nav-item.has-submenu').forEach(item => {
                         if (item !== navItem) {
                             item.classList.remove('active');
                         }
                     });
                     
-                    // Toggle current submenu
                     navItem.classList.toggle('active');
                 });
             });
@@ -935,26 +947,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
             const imagePreview = document.getElementById('imagePreview');
             const previewImg = document.getElementById('previewImg');
             
-            // Handle file selection
             fileInput.addEventListener('change', function(e) {
                 const file = e.target.files[0];
                 if (file) {
-                    // Check file type
                     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-                    if (!allowedTypes.includes(file.type)) {
-                        alert('Please select a valid image file (JPG, JPEG, PNG, GIF)');
+                    if (!allowedTypes.includes(file.type) || file.size > 10 * 1024 * 1024) {
+                        alert('Invalid file. Please select a JPG, PNG, or GIF under 10MB.');
                         fileInput.value = '';
                         return;
                     }
                     
-                    // Check file size (10MB)
-                    if (file.size > 10 * 1024 * 1024) {
-                        alert('File size must be less than 10MB');
-                        fileInput.value = '';
-                        return;
-                    }
-                    
-                    // Show preview
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         previewImg.src = e.target.result;
@@ -965,21 +967,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                 }
             });
             
-            // Drag and drop functionality
-            fileUploadArea.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                fileUploadArea.style.borderColor = 'var(--indigo-400)';
-            });
-            
-            fileUploadArea.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                fileUploadArea.style.borderColor = 'var(--border-light)';
+            // Drag and drop
+            ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+                fileUploadArea.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (eventName === 'dragover' || eventName === 'drop') {
+                        fileUploadArea.style.borderColor = 'var(--indigo-400)';
+                    } else {
+                        fileUploadArea.style.borderColor = 'var(--border-light)';
+                    }
+                });
             });
             
             fileUploadArea.addEventListener('drop', function(e) {
-                e.preventDefault();
-                fileUploadArea.style.borderColor = 'var(--border-light)';
-                
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
                     fileInput.files = files;
@@ -994,7 +995,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                 imagePreview.style.display = 'none';
                 previewImg.src = '';
             };
+            
+            // --- UPDATED JAVASCRIPT FOR AUTOMATIC LEVEL DISPLAY ---
+            const parentSelect = document.getElementById('parent_id');
+            const levelDisplay = document.getElementById('category_level_display');
+            
+            function updateLevelDisplay() {
+                const selectedOption = parentSelect.options[parentSelect.selectedIndex];
+                
+                if (!parentSelect.value) { // No parent selected
+                    levelDisplay.value = 'Main Category (Level 0)';
+                } else {
+                    const parentLevel = parseInt(selectedOption.getAttribute('data-level'));
+                    const newLevel = parentLevel + 1;
+                    levelDisplay.value = `Sub-Category (Level ${newLevel})`;
+                }
+            }
 
+            parentSelect.addEventListener('change', updateLevelDisplay);
+            updateLevelDisplay(); // Call on page load
         });
     </script>
 </body>

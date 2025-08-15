@@ -5,6 +5,25 @@
 <head>
 
    <?php include('meta.php') ?>
+   
+   <?php
+   // Database connection for slider data
+   $link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+   if (mysqli_connect_errno()) {
+       echo "Failed to connect to MySQL: " . mysqli_connect_error();
+       exit();
+   }
+   
+   // Fetch active sliders from database
+   $slider_sql = "SELECT * FROM slider WHERE status = 'active' ORDER BY created_at ASC";
+   $slider_result = mysqli_query($link, $slider_sql);
+   $sliders = [];
+   if ($slider_result) {
+       while ($row = mysqli_fetch_assoc($slider_result)) {
+           $sliders[] = $row;
+       }
+   }
+   ?>
 
     <link rel="icon" type="image/png" href="assets/img/favicon.png">   
 
@@ -28,6 +47,68 @@
     <!-- Custom CSS -->
 
     <link href="css/custom.css" rel="stylesheet">
+    
+    <!-- Dynamic Slider Styling -->
+    <style>
+        .slider-description {
+            color: #ffffff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            font-size: 50px;
+            font-weight: 700;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .slider-description h1, 
+        .slider-description h2, 
+        .slider-description h3 {
+            color: #ffffff;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+        
+        .slider-description h1 {
+            font-size: 2.5rem;
+        }
+        
+        .slider-description h2 {
+            font-size: 2rem;
+        }
+        
+        .slider-description h3 {
+            font-size: 1.5rem;
+            font-family: 'Cedarville Cursive', cursive;
+            text-transform: none;
+            font-weight: 400;
+        }
+        
+        .slider-description p {
+            margin-bottom: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .slider-description {
+                font-size: 20px;
+                padding: 15px;
+            }
+            
+            .slider-description h1 {
+                font-size: 2rem;
+            }
+            
+            .slider-description h2 {
+                font-size: 1.5rem;
+            }
+            
+            .slider-description h3 {
+                font-size: 1.25rem;
+            }
+        }
+    </style>
 
 </head>
 
@@ -47,183 +128,36 @@
 
         <div id="slider" class="inspiro-slider slider-fullscreen" data-height-xs="360" data-autoplay="6500" data-animate-in="fadeIn" data-animate-out="fadeOut" data-items="1" data-loop="true" data-autoplay="true">
 
-            <!-- Slide 1 -->
-
-            <div class="slide" style="background-image:url('assets/img/slider/slider5.jpg');">
-
-                <!-- <div class="bg-overlay"></div> -->
-
-                <div class="container">
-
-                    <div class="slide-captions text-center">
-
-                        <!-- Captions -->
-
-                        <!-- <img src="homepages/architect/images/icons/compass.png" width="32" height="32" alt="" class="center"> -->
-
-                        <h2 class="text-lg text-light no-margin text-uppercase">Welcome</h2>
-
-                        <h3 class=""> <!-- font-cedarville text-light -->
-
-                         To </h3> <h2>Jaydeck Interiors</h2> 
-
-                     
-
-
-
-                     <!-- end: Captions -->
-
-                 </div>
-
-             </div>
-
-            </div>
-
-            <!-- end: Slide 1 -->
-
-            <!-- Slide 2 -->
-
-            <div class="slide" style="background-image:url('assets/img/slider/slider9.jpg');">
-
-                <!-- <div class="bg-overlay"></div> -->
-
-                <div class="container">
-
-                    <div class="slide-captions text-center">
-
-                        <!-- Captions -->
-
-                        <!-- <img src="homepages/architect/images/icons/measuring.png" width="32" height="32" alt="" class="center"> -->
-
-                        <h2 class="text-lg text-light no-margin text-uppercase">Provide</h2>
-
-                        <h2 class="text-medium  text-light no-margin text-uppercase">efficient and all around</h2>
-
-                        <h3 class="font-cedarville text-light">
-
-                            Services for customers
-
-                        </h3>
-
-
-
-                        <!-- end: Captions -->
-
+            <?php if (!empty($sliders)): ?>
+                <?php foreach ($sliders as $index => $slider): ?>
+                    <!-- Slide <?php echo $index + 1; ?> -->
+                    <div class="slide" style="background-image:url('<?php echo htmlspecialchars($slider['image']); ?>');">
+                        <!-- <div class="bg-overlay"></div> -->
+                        <div class="container">
+                            <div class="slide-captions text-center">
+                                <!-- Captions -->
+                                <div class="slider-description">
+                                    <?php echo nl2br(htmlspecialchars($slider['description'])); ?>
+                                </div>
+                                <!-- end: Captions -->
+                            </div>
+                        </div>
                     </div>
-
-                </div>
-
-            </div>
-
-            <!-- end: Slide 2 -->
-
-            <!-- Slide 3 -->
-
-            <div class="slide" style="background-image:url('assets/img/slider/slider7.jpg');">
-
-                <!-- <div class="bg-overlay"></div> -->
-
-                <div class="container">
-
-                    <div class="slide-captions text-center">
-
-                        <!-- Captions -->
-
-                        <!-- <img src="homepages/architect/images/icons/measuring.png" width="32" height="32" alt="" class="center"> -->
-
-                        <h2 class="text-lg text-light no-margin text-uppercase">Design</h2>
-
-                        <h2 class="text-medium  text-light no-margin text-uppercase">is changing the world</h2>
-
-                        <h3 class="font-cedarville text-light">
-
-                            Customized Interior Project Furniture
-
-                        </h3>
-
-
-
-                        <!-- end: Captions -->
-
+                    <!-- end: Slide <?php echo $index + 1; ?> -->
+                <?php endforeach; ?>
+            <?php else: ?>
+                <!-- Fallback slide if no database slides found -->
+                <div class="slide" style="background-image:url('assets/img/slider/slider5.jpg');">
+                    <div class="container">
+                        <div class="slide-captions text-center">
+                            <h2 class="text-lg text-light no-margin text-uppercase">Welcome</h2>
+                            <h3 class="">To </h3> 
+                            <h2>Jaydeck Interiors</h2> 
+                        </div>
                     </div>
-
                 </div>
+            <?php endif; ?>
 
-            </div>
-
-            <!-- end: Slide 3 -->
-
-            <!-- Slide 4 -->
-
-            <div class="slide" style="background-image:url('assets/img/slider/slider11.jpg');">
-
-                <!-- <div class="bg-overlay"></div> -->
-
-                <div class="container">
-
-                    <div class="slide-captions text-center">
-
-                        <!-- Captions -->
-
-                        <!-- <img src="homepages/architect/images/icons/measuring.png" width="32" height="32" alt="" class="center"> -->
-
-                        <h2 class="text-lg text-light no-margin text-uppercase">Design</h2>
-
-                        <h2 class="text-medium  text-light no-margin text-uppercase">is changing the world</h2>
-
-                        <h3 class="font-cedarville text-light">
-
-                            Customized Interior Project Furniture
-
-                        </h3>
-
-
-
-                        <!-- end: Captions -->
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <!-- end: Slide 4 -->
-
-            <!-- Slide 4 -->
-
-            <div class="slide" style="background-image:url('assets/img/slider/slider1.jpg');">
-
-                <!-- <div class="bg-overlay"></div> -->
-
-                <div class="container">
-
-                    <div class="slide-captions text-center">
-
-                        <!-- Captions -->
-
-                        <!-- <img src="homepages/architect/images/icons/measuring.png" width="32" height="32" alt="" class="center"> -->
-
-                        <h2 class="text-lg text-light no-margin text-uppercase">Design</h2>
-
-                        <h2 class="text-medium  text-light no-margin text-uppercase">is changing the world</h2>
-
-                        <h3 class="font-cedarville text-light">
-
-                            Customized Interior Project Furniture
-
-                        </h3>
-
-
-
-                        <!-- end: Captions -->
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <!-- end: Slide 4 -->
     </div>
 
     <!--end: Inspiro Slider -->
