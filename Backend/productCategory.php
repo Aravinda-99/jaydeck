@@ -1,7 +1,7 @@
 
 <?php
 // Database connection
-$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -13,7 +13,7 @@ if (isset($_POST['delete_category'])) {
     $category_id = intval($_POST['delete_category']);
     
     // First get the image path to delete the file
-    $get_image_sql = "SELECT image FROM product_categories WHERE id = $category_id";
+    $get_image_sql = "SELECT image FROM product_category WHERE id = $category_id";
     $image_result = mysqli_query($link, $get_image_sql);
     if ($image_result && $image_row = mysqli_fetch_assoc($image_result)) {
         $image_path = "../" . $image_row['image'];
@@ -22,8 +22,8 @@ if (isset($_POST['delete_category'])) {
         }
     }
     
-    // Delete from database (soft delete by setting deleted_at)
-    $delete_sql = "UPDATE product_categories SET deleted_at = NOW() WHERE id = $category_id";
+    // Delete from database (hard delete since no deleted_at column visible)
+    $delete_sql = "DELETE FROM product_category WHERE id = $category_id";
     if (mysqli_query($link, $delete_sql)) {
         echo "<script>alert('Category deleted successfully!'); window.location.href='productCategory.php';</script>";
     } else {
@@ -32,7 +32,7 @@ if (isset($_POST['delete_category'])) {
 }
 
 // Fetch category data from database
-$sql = "SELECT * FROM product_categories WHERE deleted_at IS NULL ORDER BY display_order ASC, created_at DESC";
+$sql = "SELECT * FROM product_category ORDER BY display_order ASC, created_at DESC";
 $result = mysqli_query($link, $sql);
 $categories = [];
 if ($result) {
@@ -837,8 +837,8 @@ if ($result) {
                         <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
                     </a>
                     <ul class="submenu">
-                        <li><a href="../admin/products" class="submenu-link">All Product</a></li>
-                        <li><a href="../admin/products/create" class="submenu-link">Add Product</a></li>
+                        <li><a href="allProduct.php" class="submenu-link">All Product</a></li>
+                        <li><a href="addProduct.php" class="submenu-link">Add Product</a></li>
                         <li><a href="productCategory.php" class="submenu-link" style="background-color: rgba(255, 255, 255, 0.1); color: #ffffff;">Product Category</a></li>
                         <li><a href="addCategory.php" class="submenu-link">Add Category</a></li>
                     </ul>
@@ -915,10 +915,7 @@ if ($result) {
                                     <th>Image</th>
                                     <th>Name</th>
                                     <th>Description</th>
-                                    <th>Parent ID</th>
-                                    <th>Level</th>
-                                    <th>Order</th>
-                                    <th>Created Date</th>
+                                    <th>Display Order</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -941,10 +938,7 @@ if ($result) {
                                             </td>
                                             <td><?php echo htmlspecialchars($category['name'] ?? 'Unnamed Category'); ?></td>
                                             <td><?php echo htmlspecialchars($category['description'] ?? 'No Description'); ?></td>
-                                            <td><?php echo $category['parent_id'] ?? '-'; ?></td>
-                                            <td><?php echo $category['category_level'] ?? 0; ?></td>
                                             <td><?php echo $category['display_order'] ?? '-'; ?></td>
-                                            <td><?php echo date('Y-m-d', strtotime($category['created_at'])); ?></td>
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="btn-edit" onclick="editCategory(<?php echo $category['id']; ?>)">Edit</button>
@@ -955,8 +949,8 @@ if ($result) {
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="9" style="text-align: center; padding: 2rem; color: #6b7280;">
-                                            No categories found. <a href="../admin/categories/create" style="color: var(--indigo-600);">Add your first category</a>
+                                        <td colspan="6" style="text-align: center; padding: 2rem; color: #6b7280;">
+                                            No categories found. <a href="addCategory.php" style="color: var(--indigo-600);">Add your first category</a>
                                         </td>
                                     </tr>
                                 <?php endif; ?>
@@ -1056,10 +1050,9 @@ if ($result) {
                         const id = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
                         const name = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
                         const description = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
-                        const parentId = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
-                        const order = row.querySelector('td:nth-child(7)').textContent.toLowerCase();
+                        const order = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
                         
-                        if (id.includes(searchTerm) || name.includes(searchTerm) || description.includes(searchTerm) || parentId.includes(searchTerm) || order.includes(searchTerm)) {
+                        if (id.includes(searchTerm) || name.includes(searchTerm) || description.includes(searchTerm) || order.includes(searchTerm)) {
                             row.style.display = '';
                         } else {
                             row.style.display = 'none';
@@ -1079,7 +1072,7 @@ if ($result) {
             // Edit category function
             window.editCategory = function(categoryId) {
                 // Redirect to edit page with category ID
-                window.location.href = '../admin/categories/' + categoryId + '/edit';
+                window.location.href = 'editProductCategory.php?id=' + categoryId;
             };
 
             // Delete category function

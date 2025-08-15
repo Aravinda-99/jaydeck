@@ -1,7 +1,7 @@
 
 <?php
 // Database connection
-$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -11,52 +11,146 @@ if (mysqli_connect_errno()) {
 $message = '';
 $messageType = '';
 
-// Handle form submission
-if (isset($_POST['add_slider'])) {
-    $description = mysqli_real_escape_string($link, $_POST['description']);
-    $status = mysqli_real_escape_string($link, $_POST['status']);
+// Fetch brands and categories for dropdowns
+$brands = [];
+$categories = [];
+
+$brand_sql = "SELECT id, name FROM brand ORDER BY name ASC";
+$brand_result = mysqli_query($link, $brand_sql);
+if ($brand_result) {
+    while ($row = mysqli_fetch_assoc($brand_result)) {
+        $brands[] = $row;
+    }
+}
+
+$category_sql = "SELECT id, name FROM product_categories WHERE active = 1 ORDER BY name ASC";
+$category_result = mysqli_query($link, $category_sql);
+if ($category_result) {
+    while ($row = mysqli_fetch_assoc($category_result)) {
+        $categories[] = $row;
+    }
+}
+
+// Debug: Always show what we received
+echo "<!-- DEBUG: POST METHOD: " . $_SERVER['REQUEST_METHOD'] . " -->";
+echo "<!-- DEBUG: POST KEYS: " . implode(', ', array_keys($_POST)) . " -->";
+echo "<!-- DEBUG: add_product isset: " . (isset($_POST['add_product']) ? 'YES' : 'NO') . " -->";
+
+// Handle form submission - simplified check
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    echo "<!-- POST REQUEST RECEIVED -->";
     
-    // Handle file upload
-    if (isset($_FILES['slider_image']) && $_FILES['slider_image']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = '../assets/img/slider/';
+    if (isset($_POST['add_product'])) {
+    echo "<!-- FORM SUBMITTED: YES -->";
+    echo "<!-- POST DATA: " . htmlspecialchars(print_r($_POST, true)) . " -->";
+    
+    // Get form data with default values
+    $name = isset($_POST['name']) ? mysqli_real_escape_string($link, trim($_POST['name'])) : '';
+    $code = isset($_POST['code']) ? mysqli_real_escape_string($link, trim($_POST['code'])) : '';
+    $slug = isset($_POST['slug']) ? mysqli_real_escape_string($link, trim($_POST['slug'])) : '';
+    $description = isset($_POST['description']) ? mysqli_real_escape_string($link, trim($_POST['description'])) : '';
+    $brand_id = !empty($_POST['brand_id']) ? intval($_POST['brand_id']) : NULL;
+    $cat_id = !empty($_POST['cat_id']) ? intval($_POST['cat_id']) : NULL;
+    $active = isset($_POST['active']) ? intval($_POST['active']) : 1;
+    
+    echo "<!-- PROCESSED VALUES: name='$name', code='$code', slug='$slug', brand_id=$brand_id, cat_id=$cat_id, active=$active -->";
+    
+    // Validate required fields
+    if (empty($name) || empty($code)) {
+        $message = 'Product name and code are required!';
+        $messageType = 'error';
+        echo "<!-- VALIDATION ERROR: Missing required fields -->";
+    } else {
+        echo "<!-- VALIDATION: PASSED -->";
         
-        // Create directory if it doesn't exist
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
-        }
+        $main_image_path = NULL; // Default to NULL if no image
+        $upload_error = ''; // Separate variable for upload errors
         
-        $fileName = time() . '_' . basename($_FILES['slider_image']['name']);
-        $targetPath = $uploadDir . $fileName;
-        $dbPath = 'assets/img/slider/' . $fileName;
-        
-        // Check if file is an image
-        $imageFileType = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
-        $allowedTypes = array('jpg', 'jpeg', 'png', 'gif');
-        
-        if (in_array($imageFileType, $allowedTypes)) {
-            if (move_uploaded_file($_FILES['slider_image']['tmp_name'], $targetPath)) {
-                // Insert into database
-                $sql = "INSERT INTO slider (image, description, status, created_at) VALUES ('$dbPath', '$description', '$status', NOW())";
-                
-                if (mysqli_query($link, $sql)) {
-                    $message = 'Slider added successfully!';
-                    $messageType = 'success';
+        // Handle main image upload for product2 table
+        if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
+            echo "<!-- FILE UPLOAD: Processing main image -->";
+            $uploadDir = '../assets/uploads/products/main_image/';
+            
+            // Create directory if it doesn't exist
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+                echo "<!-- DIRECTORY CREATED: $uploadDir -->";
+            }
+            
+            $fileName = time() . '_' . basename($_FILES['product_image']['name']);
+            $targetPath = $uploadDir . $fileName;
+            $main_image_path = 'assets/uploads/products/main_image/' . $fileName;
+            
+            echo "<!-- UPLOAD DIR: $uploadDir -->";
+            echo "<!-- TARGET PATH: $targetPath -->";
+            echo "<!-- DB PATH: $main_image_path -->";
+            
+            echo "<!-- FILE PATH: $main_image_path -->";
+            
+            // Check if file is an image
+            $imageFileType = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
+            $allowedTypes = array('jpg', 'jpeg', 'png', 'gif');
+            
+            if (in_array($imageFileType, $allowedTypes)) {
+                if (!move_uploaded_file($_FILES['product_image']['tmp_name'], $targetPath)) {
+                    $upload_error = 'Error uploading main image.';
+                    $main_image_path = NULL;
+                    echo "<!-- FILE UPLOAD ERROR -->";
                 } else {
-                    $message = 'Error adding slider: ' . mysqli_error($link);
-                    $messageType = 'error';
+                    echo "<!-- FILE UPLOADED SUCCESSFULLY -->";
                 }
             } else {
-                $message = 'Error uploading file.';
-                $messageType = 'error';
+                $upload_error = 'Only JPG, JPEG, PNG, and GIF files are allowed.';
+                $main_image_path = NULL;
+                echo "<!-- FILE TYPE ERROR -->";
             }
         } else {
-            $message = 'Only JPG, JPEG, PNG, and GIF files are allowed.';
-            $messageType = 'error';
+            echo "<!-- NO MAIN IMAGE UPLOADED -->";
         }
-    } else {
-        $message = 'Please select an image file.';
-        $messageType = 'error';
+        
+        // Always try to insert product (even if image upload failed)
+        {
+            $brand_part = ($brand_id > 0) ? $brand_id : "NULL";
+            $cat_part = ($cat_id > 0) ? $cat_id : "NULL";
+            $image_part = $main_image_path ? "'$main_image_path'" : "NULL";
+            
+            $sql = "INSERT INTO product2 (name, code, slug, description, image, active, brand_id, cat_id, created_at, updated_at) 
+                    VALUES ('$name', '$code', '$slug', '$description', $image_part, $active, $brand_part, $cat_part, NOW(), NOW())";
+            
+            echo "<!-- SQL QUERY: $sql -->";
+            
+            if (mysqli_query($link, $sql)) {
+                $product_id = mysqli_insert_id($link);
+                
+                if (!empty($upload_error)) {
+                    $message = 'Product added successfully (ID: ' . $product_id . ') but image upload failed: ' . $upload_error;
+                    $messageType = 'success'; // Still success because product was added
+                } else if ($main_image_path) {
+                    $message = 'Product added successfully with image! ID: ' . $product_id;
+                    $messageType = 'success';
+                } else {
+                    $message = 'Product added successfully (no image)! ID: ' . $product_id;
+                    $messageType = 'success';
+                }
+                
+                echo "<!-- DATABASE INSERT: SUCCESS - ID: $product_id -->";
+                echo "<!-- IMAGE PATH: " . ($main_image_path ? $main_image_path : 'NULL') . " -->";
+                echo "<!-- UPLOAD ERROR: " . ($upload_error ? $upload_error : 'NONE') . " -->";
+                
+                // Clear form data on success
+                $_POST = array();
+            } else {
+                $message = 'Error adding product: ' . mysqli_error($link);
+                $messageType = 'error';
+                echo "<!-- DATABASE ERROR: " . mysqli_error($link) . " -->";
+            }
+        }
     }
+    } else {
+        echo "<!-- add_product button NOT FOUND in POST -->";
+    }
+} else {
+    echo "<!-- NOT A POST REQUEST - Method: " . $_SERVER['REQUEST_METHOD'] . " -->";
 }
 ?>
 <!DOCTYPE html>
@@ -64,7 +158,7 @@ if (isset($_POST['add_slider'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Slider - Modern Admin Panel</title>
+    <title>Add Product - Modern Admin Panel</title>
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -977,7 +1071,7 @@ if (isset($_POST['add_slider'])) {
             </div>
 
             <nav class="sidebar-nav">
-                <a href="#" class="nav-link active">
+                <a href="index.php" class="nav-link">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span>Dashboard</span>
                 </a>
@@ -995,7 +1089,7 @@ if (isset($_POST['add_slider'])) {
                 </a>
                 
                 <!-- Slider Menu with Sub-menu -->
-                <div class="nav-item has-submenu active">
+                <div class="nav-item has-submenu">
                     <a href="#" class="nav-link submenu-toggle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
                         <span>Slider</span>
@@ -1003,22 +1097,22 @@ if (isset($_POST['add_slider'])) {
                     </a>
                     <ul class="submenu">
                         <li><a href="Allslider.php" class="submenu-link">All Slider</a></li>
-                        <li><a href="addSlider.php" class="submenu-link" style="background-color: rgba(255, 255, 255, 0.1); color: #ffffff;">Add Slider</a></li>
+                        <li><a href="addSlider.php" class="submenu-link">Add Slider</a></li>
                     </ul>
                 </div>
                 
                 <!-- Product Menu with Sub-menu -->
-                <div class="nav-item has-submenu">
+                <div class="nav-item has-submenu active">
                     <a href="#" class="nav-link submenu-toggle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
                         <span>Product</span>
                         <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
                     </a>
                     <ul class="submenu">
-                        <li><a href="../admin/products" class="submenu-link">All Product</a></li>
-                        <li><a href="../admin/products/create" class="submenu-link">Add Product</a></li>
-                        <li><a href="../admin/categories" class="submenu-link">Product Category</a></li>
-                        <li><a href="../admin/categories/create" class="submenu-link">Add Category</a></li>
+                        <li><a href="allProduct.php" class="submenu-link">All Product</a></li>
+                        <li><a href="addProduct.php" class="submenu-link" style="background-color: rgba(255, 255, 255, 0.1); color: #ffffff;">Add Product</a></li>
+                        <li><a href="productCategory.php" class="submenu-link">Product Category</a></li>
+                        <li><a href="addCategory.php" class="submenu-link">Add Category</a></li>
                     </ul>
                 </div>
             </nav>
@@ -1051,7 +1145,7 @@ if (isset($_POST['add_slider'])) {
             <main class="main-area">
                 <!-- Header for Desktop View -->
                 <div class="main-header">
-                    <h2>Add New Slider</h2>
+                    <h2>Add New Product</h2>
                     
                     <div class="header-right">
                         <button id="theme-toggle-desktop" class="theme-toggle">
@@ -1067,13 +1161,13 @@ if (isset($_POST['add_slider'])) {
                 
                 <!-- Scrollable Content Area -->
                 <div class="main-content-scroll">
-                    <!-- Add Slider Form -->
+                    <!-- Add Product Form -->
                     <div class="form-container">
                         <div class="form-header">
-                            <h3>Add New Slider</h3>
-                            <a href="Allslider.php" class="view-all-btn">
+                            <h3>Add New Product</h3>
+                            <a href="allProduct.php" class="view-all-btn">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-                                Back to All Sliders
+                                Back to All Products
                             </a>
                         </div>
                         
@@ -1085,9 +1179,53 @@ if (isset($_POST['add_slider'])) {
                         
                         <form method="POST" enctype="multipart/form-data" class="slider-form">
                             <div class="form-group">
-                                <label for="slider_image">Slider Image *</label>
+                                <label for="name">Product Name *</label>
+                                <input type="text" id="name" name="name" placeholder="Enter product name..." value="<?php echo isset($_POST['name']) ? htmlspecialchars($_POST['name']) : ''; ?>" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="code">Product Code *</label>
+                                <input type="text" id="code" name="code" placeholder="Enter product code..." value="<?php echo isset($_POST['code']) ? htmlspecialchars($_POST['code']) : ''; ?>" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="slug">Product Slug</label>
+                                <input type="text" id="slug" name="slug" placeholder="Enter product slug..." value="<?php echo isset($_POST['slug']) ? htmlspecialchars($_POST['slug']) : ''; ?>">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="description">Description</label>
+                                <textarea id="description" name="description" rows="4" placeholder="Enter product description..."><?php echo isset($_POST['description']) ? htmlspecialchars($_POST['description']) : ''; ?></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="brand_id">Brand</label>
+                                <select id="brand_id" name="brand_id">
+                                    <option value="">Select Brand</option>
+                                    <?php foreach ($brands as $brand): ?>
+                                        <option value="<?php echo $brand['id']; ?>" <?php echo (isset($_POST['brand_id']) && $_POST['brand_id'] == $brand['id']) ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($brand['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="cat_id">Category</label>
+                                <select id="cat_id" name="cat_id">
+                                    <option value="">Select Category</option>
+                                    <?php foreach ($categories as $category): ?>
+                                        <option value="<?php echo $category['id']; ?>" <?php echo (isset($_POST['cat_id']) && $_POST['cat_id'] == $category['id']) ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($category['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="product_image">Product Image (Optional)</label>
                                 <div class="file-upload-area" id="fileUploadArea">
-                                    <input type="file" id="slider_image" name="slider_image" accept="image/*" required>
+                                    <input type="file" id="product_image" name="product_image" accept="image/*">
                                     <div class="upload-placeholder">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
                                         <p>Click to upload or drag and drop</p>
@@ -1101,23 +1239,18 @@ if (isset($_POST['add_slider'])) {
                             </div>
                             
                             <div class="form-group">
-                                <label for="description">Description *</label>
-                                <textarea id="description" name="description" rows="4" placeholder="Enter slider description..." required></textarea>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="status">Status *</label>
-                                <select id="status" name="status" required>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
+                                <label for="active">Status *</label>
+                                <select id="active" name="active" required>
+                                    <option value="1" <?php echo (!isset($_POST['active']) || $_POST['active'] == '1') ? 'selected' : ''; ?>>Active</option>
+                                    <option value="0" <?php echo (isset($_POST['active']) && $_POST['active'] == '0') ? 'selected' : ''; ?>>Inactive</option>
                                 </select>
                             </div>
                             
                             <div class="form-actions">
-                                <button type="button" class="btn-cancel" onclick="window.location.href='Allslider.php'">Cancel</button>
-                                <button type="submit" name="add_slider" class="btn-submit">
+                                <button type="button" class="btn-cancel" onclick="window.location.href='allProduct.php'">Cancel</button>
+                                <button type="submit" name="add_product" class="btn-submit">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
-                                    Add Slider
+                                    Add Product
                                 </button>
                             </div>
                         </form>
@@ -1204,7 +1337,7 @@ if (isset($_POST['add_slider'])) {
             });
             
             // File upload functionality
-            const fileInput = document.getElementById('slider_image');
+            const fileInput = document.getElementById('product_image');
             const fileUploadArea = document.getElementById('fileUploadArea');
             const uploadPlaceholder = fileUploadArea.querySelector('.upload-placeholder');
             const imagePreview = document.getElementById('imagePreview');

@@ -1,6 +1,6 @@
 <?php
 // Database connection
-$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -19,15 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
     echo "<!-- FORM SUBMITTED: YES -->";
     echo "<!-- POST DATA: " . htmlspecialchars(print_r($_POST, true)) . " -->";
     
-    // Get form data
+    // Get form data (only fields that exist in your DB)
     $name = isset($_POST['name']) ? trim($_POST['name']) : '';
     $description = isset($_POST['description']) ? trim($_POST['description']) : '';
-    $category_level = isset($_POST['category_level']) ? intval($_POST['category_level']) : 0;
-    $active = isset($_POST['active']) ? intval($_POST['active']) : 1;
     $display_order = isset($_POST['display_order']) ? intval($_POST['display_order']) : 0;
-    $user_id = 1;
     
-    echo "<!-- RAW VALUES: name='$name', desc='$description', level=$category_level, active=$active, order=$display_order -->";
+    echo "<!-- RAW VALUES: name='$name', desc='$description', order=$display_order -->";
     
     // Validate required fields
     if (empty($name)) {
@@ -35,18 +32,62 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
         $messageType = 'error';
         echo "<!-- VALIDATION ERROR: Name is empty -->";
     } else {
-        // Try simple insert without prepared statements first
+        $main_image_path = NULL; // Default to NULL if no image
+        
+        // Handle image upload
+        if (isset($_FILES['category_image']) && $_FILES['category_image']['error'] === UPLOAD_ERR_OK) {
+            echo "<!-- FILE UPLOAD: Processing category image -->";
+            $uploadDir = '../assets/uploads/categories/main_image/';
+            
+            // Create directory if it doesn't exist
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+                echo "<!-- DIRECTORY CREATED: $uploadDir -->";
+            }
+            
+            $fileName = time() . '_' . basename($_FILES['category_image']['name']);
+            $targetPath = $uploadDir . $fileName;
+            $main_image_path = 'assets/uploads/categories/main_image/' . $fileName;
+            
+            echo "<!-- FILE PATH: $main_image_path -->";
+            
+            // Check if file is an image
+            $imageFileType = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
+            $allowedTypes = array('jpg', 'jpeg', 'png', 'gif');
+            
+            if (in_array($imageFileType, $allowedTypes)) {
+                if (!move_uploaded_file($_FILES['category_image']['tmp_name'], $targetPath)) {
+                    echo "<!-- FILE UPLOAD ERROR -->";
+                    $main_image_path = NULL;
+                } else {
+                    echo "<!-- FILE UPLOADED SUCCESSFULLY -->";
+                }
+            } else {
+                echo "<!-- FILE TYPE ERROR -->";
+                $main_image_path = NULL;
+            }
+        } else {
+            echo "<!-- NO IMAGE UPLOADED -->";
+        }
+        
+        // Escape data for database
         $name_escaped = mysqli_real_escape_string($link, $name);
         $description_escaped = mysqli_real_escape_string($link, $description);
+        $image_part = $main_image_path ? "'$main_image_path'" : "NULL";
         
-        $sql = "INSERT INTO product_categories (name, description, parent_id, category_level, active, display_order, user_id, created_at, updated_at) VALUES ('$name_escaped', '$description_escaped', NULL, $category_level, $active, $display_order, $user_id, NOW(), NOW())";
+        // SQL for your simplified table structure (only 5 columns)
+        $sql = "INSERT INTO product_category (name, description, image, display_order) VALUES ('$name_escaped', '$description_escaped', $image_part, $display_order)";
         
         echo "<!-- SQL QUERY: $sql -->";
         
         if (mysqli_query($link, $sql)) {
-            $message = 'Category added successfully! ID: ' . mysqli_insert_id($link);
+            $category_id = mysqli_insert_id($link);
+            $message = 'Category added successfully! ID: ' . $category_id;
             $messageType = 'success';
-            echo "<!-- DATABASE INSERT: SUCCESS - ID: " . mysqli_insert_id($link) . " -->";
+            echo "<!-- DATABASE INSERT: SUCCESS - ID: $category_id -->";
+            
+            // Clear form data on success
+            $_POST = array();
         } else {
             $message = 'Database error: ' . mysqli_error($link);
             $messageType = 'error';
@@ -777,8 +818,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                             </div>
                             
                             <div class="form-group">
-                                <label for="category_level">Category Level *</label>
-                                <input type="number" id="category_level" name="category_level" value="<?php echo isset($_POST['category_level']) ? intval($_POST['category_level']) : 0; ?>" min="0" max="10" required>
+                                <label for="display_order">Display Order</label>
+                                <input type="number" id="display_order" name="display_order" value="<?php echo isset($_POST['display_order']) ? intval($_POST['display_order']) : 0; ?>" min="0" placeholder="Enter display order (optional)">
                             </div>
                             
                             <div class="form-group">
@@ -795,19 +836,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
                                         <button type="button" class="remove-image" onclick="removeImage()">×</button>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="active">Status *</label>
-                                <select id="active" name="active" required>
-                                    <option value="1" <?php echo (!isset($_POST['active']) || $_POST['active'] == '1') ? 'selected' : ''; ?>>Active</option>
-                                    <option value="0" <?php echo (isset($_POST['active']) && $_POST['active'] == '0') ? 'selected' : ''; ?>>Inactive</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="display_order">Display Order</label>
-                                <input type="number" id="display_order" name="display_order" value="<?php echo isset($_POST['display_order']) ? intval($_POST['display_order']) : 0; ?>" min="0">
                             </div>
                             
                             <div class="form-actions">
