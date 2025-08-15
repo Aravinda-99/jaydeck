@@ -4,7 +4,7 @@
 
         
 
-$link = mysqli_connect("localhost:4306","root","","jaydeck");
+$link = mysqli_connect("localhost:3307","root","","jaydeck");
 
 
 
