@@ -1,15 +1,27 @@
 
 <?php
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+// Get user information from session
+$user_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin User';
+$user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
+
 // Database connection
-$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
     exit();
 }
 
-$message = '';
-$messageType = '';
+$message = null;
+$messageType = null;
 
 // Fetch brands and categories for dropdowns
 $brands = [];
@@ -169,6 +181,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="../admin/assets/plugins/sweetalert/sweetalert.css" rel="stylesheet" />
+    <script src="../admin/assets/plugins/sweetalert/sweetalert.min.js"></script>
+
+    <?php if (!empty($message) && !empty($messageType)): ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                var messageText = <?php echo json_encode($message); ?>;
+                var messageType = <?php echo json_encode($messageType); ?>;
+                var messageTitle = messageType === 'success' ? 'Success!' : 'Error!';
+                
+                swal({
+                    title: messageTitle,
+                    text: messageText,
+                    type: messageType,
+                    confirmButtonText: "OK",
+                    confirmButtonColor: messageType === 'success' ? '#4f46e5' : '#dc2626',
+                    closeOnConfirm: true
+                }, function() {
+                    if (messageType === 'success') {
+                        window.location.href = 'allProduct.php';
+                    }
+                });
+            }, 500);
+        });
+    </script>
+    <?php endif; ?>
 
     <style>
         /* CSS Variables for Theming */
@@ -1123,7 +1162,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </nav>
 
             <div class="sidebar-footer">
-                 <a href="#" class="nav-link">
+                 <a href="logout.php" class="nav-link" onclick="return confirm('Are you sure you want to logout?')">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
                     <span>Logout</span>
                 </a>
@@ -1142,7 +1181,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <svg id="theme-icon-dark-mobile" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                     </button>
                     <button class="profile-button">
-                        <img src="https://placehold.co/40x40/6366f1/ffffff?text=A" alt="Admin">
+                        <img src="https://placehold.co/40x40/6366f1/ffffff?text=<?php echo strtoupper(substr($user_name, 0, 1)); ?>" alt="<?php echo htmlspecialchars($user_name); ?>">
                     </button>
                 </div>
             </header>
@@ -1158,8 +1197,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             <svg id="theme-icon-dark-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                         </button>
                         <button class="profile-button">
-                            <img src="https://placehold.co/40x40/6366f1/ffffff?text=A" alt="Admin">
-                            <span>Admin User</span>
+                            <img src="https://placehold.co/40x40/6366f1/ffffff?text=<?php echo strtoupper(substr($user_name, 0, 1)); ?>" alt="<?php echo htmlspecialchars($user_name); ?>">
+                            <span><?php echo htmlspecialchars($user_name); ?></span>
                         </button>
                     </div>
                 </div>
@@ -1176,11 +1215,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             </a>
                         </div>
                         
-                        <?php if ($message): ?>
-                            <div class="message <?php echo $messageType; ?>">
-                                <?php echo htmlspecialchars($message); ?>
-                            </div>
-                        <?php endif; ?>
+                        <!-- Messages are now shown via SweetAlert in the head section -->
                         
                         <form method="POST" enctype="multipart/form-data" class="slider-form">
                             <div class="form-group">
@@ -1567,6 +1602,145 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
 
         });
+        // Theme-aware SweetAlert styling
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        
+        // Custom SweetAlert styling based on theme
+        const sweetAlertCustomClass = {
+            popup: isDarkMode ? 'dark-theme-popup' : 'light-theme-popup',
+            title: isDarkMode ? 'dark-theme-title' : 'light-theme-title',
+            content: isDarkMode ? 'dark-theme-content' : 'light-theme-content',
+            confirmButton: isDarkMode ? 'dark-theme-button' : 'light-theme-button'
+        };
+
     </script>
+
+    <style>
+        /* SweetAlert Theme Customization */
+        .dark-theme-popup {
+            background-color: var(--card-bg-light) !important;
+            border: 1px solid var(--border-light) !important;
+        }
+        
+        .dark-theme-title {
+            color: var(--text-light) !important;
+        }
+        
+        .dark-theme-content {
+            color: var(--text-light) !important;
+        }
+        
+        .dark-theme-button {
+            background-color: var(--indigo-600) !important;
+            color: #ffffff !important;
+        }
+        
+        .light-theme-popup {
+            background-color: #ffffff !important;
+        }
+        
+        .light-theme-title {
+            color: var(--text-dark) !important;
+        }
+        
+        .light-theme-content {
+            color: var(--text-dark) !important;
+        }
+        
+        .light-theme-button {
+            background-color: var(--indigo-600) !important;
+            color: #ffffff !important;
+        }
+
+        /* SweetAlert Theme Customization */
+        .sweet-alert {
+            font-family: var(--font-sans) !important;
+            border-radius: 8px !important;
+        }
+
+        .sweet-alert h2 {
+            font-family: var(--font-sans) !important;
+            font-weight: 600 !important;
+            color: #1f2937 !important;
+        }
+
+        .sweet-alert p {
+            font-family: var(--font-sans) !important;
+            font-weight: 400 !important;
+            color: #374151 !important;
+        }
+
+        /* Dark theme overrides */
+        .dark .sweet-alert {
+            background-color: #1f2937 !important;
+        }
+
+        .dark .sweet-alert h2 {
+            color: #f9fafb !important;
+        }
+
+        .dark .sweet-alert p {
+            color: #d1d5db !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-success::before,
+        .dark .sweet-alert .sa-icon.sa-success::after {
+            background-color: #1f2937 !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-success .sa-fix {
+            background-color: #1f2937 !important;
+        }
+
+        /* Light theme */
+        .light-theme-alert {
+            background-color: #ffffff !important;
+            color: var(--text-dark) !important;
+        }
+
+        .light-theme-alert h2 {
+            color: var(--text-dark) !important;
+            font-family: var(--font-sans) !important;
+        }
+
+        .light-theme-alert p {
+            color: var(--text-dark) !important;
+            font-family: var(--font-sans) !important;
+        }
+
+        /* Dark theme */
+        .dark-theme-alert {
+            background-color: var(--card-bg-light) !important;
+            color: var(--text-light) !important;
+        }
+
+        .dark-theme-alert h2 {
+            color: var(--text-light) !important;
+            font-family: var(--font-sans) !important;
+        }
+
+        .dark-theme-alert p {
+            color: var(--text-light) !important;
+            font-family: var(--font-sans) !important;
+        }
+
+        /* Success icon background fix */
+        .dark-theme-alert .sa-icon.sa-success::before,
+        .dark-theme-alert .sa-icon.sa-success::after {
+            background-color: var(--card-bg-light) !important;
+        }
+
+        .dark-theme-alert .sa-icon.sa-success .sa-fix {
+            background-color: var(--card-bg-light) !important;
+        }
+
+        /* Button styles */
+        .sweet-alert button {
+            font-family: var(--font-sans) !important;
+            font-weight: 500 !important;
+            padding: 8px 20px !important;
+            border-radius: 6px !important;
+        }
+    </style>
 </body>
 </html>
