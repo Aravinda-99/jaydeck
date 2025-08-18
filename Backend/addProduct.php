@@ -13,7 +13,7 @@ $user_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin Use
 $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
 
 // Database connection
-$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -1154,7 +1154,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </a>
                     <ul class="submenu">
                         <li><a href="allProduct.php" class="submenu-link">All Product</a></li>
-                        <li><a href="addProduct.php" class="submenu-link" style="background-color: rgba(255, 255, 255, 0.1); color: #ffffff;">Add Product</a></li>
+                        <li><a href="addProduct.php" class="submenu-link">Add Product</a></li>
                         <li><a href="productCategory.php" class="submenu-link">Product Category</a></li>
                         <li><a href="addCategory.php" class="submenu-link">Add Category</a></li>
                     </ul>

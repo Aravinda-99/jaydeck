@@ -419,7 +419,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
             <div class="overlay overlay--right">
                 <h3 class="overlay__heading">Welcome to Admin Panel</h3>
                 <p class="overlay__desc">Enter your personal details to access the admin panel</p>
-                <button type="button" id="go-register" class="btn btn--main-outline">Sign Up</button>
+                <!-- <button type="button" id="go-register" class="btn btn--main-outline">Sign Up</button> -->
             </div>
             <div class="overlay overlay--left">
                 <h3 class="overlay__heading">Welcome Back!</h3>

@@ -10,6 +10,50 @@ if (!isset($_SESSION['user_id'])) {
 // Get user information from session
 $user_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin User';
 $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
+
+// Database connection
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+
+if (mysqli_connect_errno()) {
+    echo "Failed to connect to MySQL: " . mysqli_connect_error();
+    exit();
+}
+
+// Fetch counts for dashboard metrics
+$total_sliders = 0;
+$total_products = 0;
+$total_categories = 0;
+$total_users = 0;
+
+// Count total sliders
+$slider_sql = "SELECT COUNT(*) as count FROM slider";
+$slider_result = mysqli_query($link, $slider_sql);
+if ($slider_result && $row = mysqli_fetch_assoc($slider_result)) {
+    $total_sliders = $row['count'];
+}
+
+// Count total products
+$product_sql = "SELECT COUNT(*) as count FROM products";
+$product_result = mysqli_query($link, $product_sql);
+if ($product_result && $row = mysqli_fetch_assoc($product_result)) {
+    $total_products = $row['count'];
+}
+
+// Count total categories
+$category_sql = "SELECT COUNT(*) as count FROM product_categories";
+$category_result = mysqli_query($link, $category_sql);
+if ($category_result && $row = mysqli_fetch_assoc($category_result)) {
+    $total_categories = $row['count'];
+}
+
+// Count total users (admin users)
+$user_sql = "SELECT COUNT(*) as count FROM users";
+$user_result = mysqli_query($link, $user_sql);
+if ($user_result && $row = mysqli_fetch_assoc($user_result)) {
+    $total_users = $row['count'];
+}
+
+
 ?>
 <!DOCTYPE html>
 <html lang="en" class="">
@@ -86,6 +130,7 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
         .admin-panel {
             display: flex;
             min-height: 100vh;
+            position: relative;
         }
 
         .sidebar {
@@ -97,6 +142,8 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
             flex-shrink: 0;
             transition: transform var(--transition-speed);
             position: fixed;
+            top: 0;
+            left: 0;
             height: 100vh;
             z-index: 20;
             transform: translateX(-100%);
@@ -107,6 +154,7 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
             display: flex;
             flex-direction: column;
             transition: margin-left var(--transition-speed);
+            margin-left: 0;
         }
 
         /* Mobile Header (for menu toggle) */
@@ -497,11 +545,11 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
 
         @media (min-width: 1024px) {
             .sidebar {
-                position: relative;
+                position: fixed;
                 transform: translateX(0);
             }
             .main-content {
-                margin-left: 0;
+                margin-left: 256px;
             }
             .mobile-header {
                 display: none;
@@ -587,10 +635,37 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
             background-color: rgba(0, 0, 0, 0.2);
         }
         
-        .dark .submenu-link:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-    </style>
+                 .dark .submenu-link:hover {
+             background-color: rgba(255, 255, 255, 0.05);
+         }
+         
+         /* Chart Container Styles */
+         .chart-container {
+             background-color: var(--card-bg-light);
+             border-radius: 0.75rem;
+             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+             padding: 1.5rem;
+         }
+         
+         .chart-container h3 {
+             font-size: 1.25rem;
+             font-weight: 600;
+             margin-bottom: 1rem;
+             color: var(--text-light);
+         }
+         
+         .chart-wrapper {
+             position: relative;
+             height: 300px;
+             width: 100%;
+         }
+         
+         .dark .chart-container {
+             background-color: var(--card-bg-dark);
+         }
+         
+
+     </style>
 </head>
 <body>
 
@@ -641,10 +716,10 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
                         <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
                     </a>
                     <ul class="submenu">
-                        <li><a href="../admin/products" class="submenu-link">All Product</a></li>
-                        <li><a href="../admin/products/create" class="submenu-link">Add Product</a></li>
-                        <li><a href="../admin/categories" class="submenu-link">Product Category</a></li>
-                        <li><a href="../admin/categories/create" class="submenu-link">Add Category</a></li>
+                        <li><a href="allProduct.php" class="submenu-link">All Product</a></li>
+                        <li><a href="addProduct.php" class="submenu-link">Add Product</a></li>
+                        <li><a href="productCategory.php" class="submenu-link">Product Category</a></li>
+                        <li><a href="addCategory.php" class="submenu-link">Add Category</a></li>
                     </ul>
                 </div>
             </nav>
@@ -702,90 +777,46 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-icon icon-indigo">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
                         </div>
                         <div class="stat-card-info">
-                            <p>Total Users</p>
-                            <p>10,245</p>
+                            <p>Total Sliders</p>
+                            <p><?php echo number_format($total_sliders); ?></p>
                         </div>
                     </div>
                      <div class="stat-card">
                         <div class="stat-card-icon icon-green">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
                         </div>
                         <div class="stat-card-info">
-                            <p>Site Activity</p>
-                            <p>88.9%</p>
+                            <p>Total Products</p>
+                            <p><?php echo number_format($total_products); ?></p>
                         </div>
                     </div>
                      <div class="stat-card">
                         <div class="stat-card-icon icon-yellow">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3zM21 9V3M9 21H3M21 3l-7 7M3 21l7-7"/></svg>
                         </div>
                         <div class="stat-card-info">
-                            <p>Total Sales</p>
-                            <p>$34,598</p>
+                            <p>Total Categories</p>
+                            <p><?php echo number_format($total_categories); ?></p>
                         </div>
                     </div>
                      <div class="stat-card">
                         <div class="stat-card-icon icon-red">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                         </div>
                         <div class="stat-card-info">
-                            <p>Pending Issues</p>
-                            <p>21</p>
+                            <p>Total Users (Admin)</p>
+                            <p><?php echo number_format($total_users); ?></p>
                         </div>
                     </div>
                 </div>
 
-                <div class="users-table-container">
-                    <h3>Recent Users</h3>
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/c7d2fe/3730a3?text=LS" alt="User">
-                                            Liam Smith
-                                        </div>
-                                    </td>
-                                    <td>liam.s@example.com</td>
-                                    <td>Admin</td>
-                                    <td><span class="status-badge status-active">Active</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/fecaca/991b1b?text=OJ" alt="User">
-                                            Olivia Jones
-                                        </div>
-                                    </td>
-                                    <td>olivia.j@example.com</td>
-                                    <td>Editor</td>
-                                    <td><span class="status-badge status-pending">Pending</span></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <img src="https://placehold.co/32x32/a7f3d0/065f46?text=NW" alt="User">
-                                            Noah Williams
-                                        </div>
-                                    </td>
-                                    <td>noah.w@example.com</td>
-                                    <td>Viewer</td>
-                                    <td><span class="status-badge status-inactive">Inactive</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
+                <div class="chart-container">
+                    <h3>Data Overview</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="dataChart" width="400" height="200"></canvas>
                     </div>
                 </div>
             </main>
@@ -884,8 +915,108 @@ $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
                         searchInput.focus();
                     }
                 });
-            }
-        });
-    </script>
-</body>
-</html>
+                         }
+             
+             // Chart.js Bar Chart
+             const ctx = document.getElementById('dataChart').getContext('2d');
+             const dataChart = new Chart(ctx, {
+                 type: 'bar',
+                 data: {
+                     labels: ['Total Sliders', 'Total Products', 'Total Categories'],
+                     datasets: [{
+                         label: 'Count',
+                         data: [<?php echo $total_sliders; ?>, <?php echo $total_products; ?>, <?php echo $total_categories; ?>],
+                         backgroundColor: [
+                             'rgba(99, 102, 241, 0.8)',   // Indigo
+                             'rgba(16, 185, 129, 0.8)',    // Green
+                             'rgba(245, 158, 11, 0.8)'     // Yellow
+                         ],
+                         borderColor: [
+                             'rgba(99, 102, 241, 1)',
+                             'rgba(16, 185, 129, 1)',
+                             'rgba(245, 158, 11, 1)'
+                         ],
+                         borderWidth: 2,
+                         borderRadius: 8,
+                         borderSkipped: false,
+                     }]
+                 },
+                 options: {
+                     responsive: true,
+                     maintainAspectRatio: false,
+                     plugins: {
+                         legend: {
+                             display: false
+                         },
+                         tooltip: {
+                             backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                             titleColor: '#ffffff',
+                             bodyColor: '#ffffff',
+                             borderColor: 'rgba(255, 255, 255, 0.2)',
+                             borderWidth: 1,
+                             cornerRadius: 8,
+                             displayColors: false,
+                             callbacks: {
+                                 label: function(context) {
+                                     return context.parsed.y + ' items';
+                                 }
+                             }
+                         }
+                     },
+                     scales: {
+                         y: {
+                             beginAtZero: true,
+                             grid: {
+                                 color: 'rgba(0, 0, 0, 0.1)',
+                                 drawBorder: false
+                             },
+                             ticks: {
+                                 color: '#6b7280',
+                                 font: {
+                                     size: 12
+                                 }
+                             }
+                         },
+                         x: {
+                             grid: {
+                                 display: false
+                             },
+                             ticks: {
+                                 color: '#6b7280',
+                                 font: {
+                                     size: 12
+                                 }
+                             }
+                         }
+                     }
+                 }
+             });
+             
+             // Dark theme support for chart
+             const updateChartTheme = () => {
+                 const isDark = htmlEl.classList.contains('dark');
+                 const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                 const textColor = isDark ? '#9ca3af' : '#6b7280';
+                 
+                 dataChart.options.scales.y.grid.color = gridColor;
+                 dataChart.options.scales.y.ticks.color = textColor;
+                 dataChart.options.scales.x.ticks.color = textColor;
+                 dataChart.update();
+             };
+             
+             // Update chart theme when theme changes
+             const originalSetTheme = setTheme;
+             setTheme = (theme) => {
+                 originalSetTheme(theme);
+                 setTimeout(updateChartTheme, 100);
+             };
+             
+             // Initial theme update
+             updateChartTheme();
+         });
+     </script>
+     
+     <!-- Chart.js Library -->
+     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+ </body>
+ </html>

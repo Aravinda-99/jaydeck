@@ -5,7 +5,7 @@
 // Database connection details
 // You might need to get these from your hosting provider or configuration files.
 $servername = "localhost";
-$port = 3307; // The port from your screenshot
+$port = 4306; // The port from your screenshot
 $db_username = "root"; // Your database username (e.g., 'root' or another user)
 $db_password = ""; // Your database password
 $dbname = "jaydeck"; // The database name from your screenshot
