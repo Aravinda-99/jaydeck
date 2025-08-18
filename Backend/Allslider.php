@@ -1,7 +1,19 @@
 
 <?php
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+// Get user information from session
+$user_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin User';
+$user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
+
 // Database connection
-$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -799,7 +811,7 @@ if ($result) {
             </nav>
 
             <div class="sidebar-footer">
-                 <a href="#" class="nav-link">
+                 <a href="logout.php" class="nav-link" onclick="return confirm('Are you sure you want to logout?')">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
                     <span>Logout</span>
                 </a>
@@ -818,7 +830,7 @@ if ($result) {
                         <svg id="theme-icon-dark-mobile" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                     </button>
                     <button class="profile-button">
-                        <img src="https://placehold.co/40x40/6366f1/ffffff?text=A" alt="Admin">
+                        <img src="https://placehold.co/40x40/6366f1/ffffff?text=<?php echo strtoupper(substr($user_name, 0, 1)); ?>" alt="<?php echo htmlspecialchars($user_name); ?>">
                     </button>
                 </div>
             </header>
@@ -842,8 +854,8 @@ if ($result) {
                             <svg id="theme-icon-dark-desktop" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                         </button>
                         <button class="profile-button">
-                            <img src="https://placehold.co/40x40/6366f1/ffffff?text=A" alt="Admin">
-                            <span>Admin User</span>
+                            <img src="https://placehold.co/40x40/6366f1/ffffff?text=<?php echo strtoupper(substr($user_name, 0, 1)); ?>" alt="<?php echo htmlspecialchars($user_name); ?>">
+                            <span><?php echo htmlspecialchars($user_name); ?></span>
                         </button>
                     </div>
                 </div>

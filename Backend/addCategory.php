@@ -1,6 +1,18 @@
 <?php
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+// Get user information from session
+$user_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin User';
+$user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
+
 // Database connection
-$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -731,7 +743,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
             </nav>
 
             <div class="sidebar-footer">
-                 <a href="#" class="nav-link">
+                 <a href="logout.php" class="nav-link" onclick="return confirm('Are you sure you want to logout?')">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
                     <span>Logout</span>
                 </a>
