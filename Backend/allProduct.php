@@ -13,12 +13,15 @@ $user_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin Use
 $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
 
 // Database connection
-$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
     exit();
 }
+
+$message = null;
+$messageType = null;
 
 // Handle product deletion
 if (isset($_POST['delete_product'])) {
@@ -37,9 +40,11 @@ if (isset($_POST['delete_product'])) {
     // Delete from database
     $delete_sql = "DELETE FROM products WHERE id = $product_id";
     if (mysqli_query($link, $delete_sql)) {
-        echo "<script>alert('Product deleted successfully!'); window.location.href='allProduct.php';</script>";
+        $message = 'Product deleted successfully!';
+        $messageType = 'success';
     } else {
-        echo "<script>alert('Error deleting product: " . mysqli_error($link) . "');</script>";
+        $message = 'Error deleting product: ' . mysqli_error($link);
+        $messageType = 'error';
     }
 }
 
@@ -87,6 +92,32 @@ if ($result) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="../admin/assets/plugins/sweetalert/sweetalert.css" rel="stylesheet" />
+    <script src="../admin/assets/plugins/sweetalert/sweetalert.min.js"></script>
+
+    <?php if (!empty($message) && !empty($messageType)): ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                var messageText = <?php echo json_encode($message); ?>;
+                var messageType = <?php echo json_encode($messageType); ?>;
+                var messageTitle = messageType === 'success' ? 'Success!' : 'Error!';
+                
+                swal({
+                    title: messageTitle,
+                    text: messageText,
+                    type: messageType,
+                    confirmButtonText: "OK",
+                    confirmButtonColor: messageType === 'success' ? '#4f46e5' : '#dc2626',
+                    closeOnConfirm: true
+                }, function() {
+                    // Reload the page to refresh the product list
+                    window.location.href = 'allProduct.php';
+                });
+            }, 500);
+        });
+    </script>
+    <?php endif; ?>
 
     <style>
         /* CSS Variables for Theming */
@@ -885,6 +916,54 @@ if ($result) {
                 justify-content: center;
             }
         }
+
+        /* SweetAlert Theme Customization */
+        .sweet-alert {
+            font-family: var(--font-sans) !important;
+            border-radius: 8px !important;
+        }
+
+        .sweet-alert h2 {
+            font-family: var(--font-sans) !important;
+            font-weight: 600 !important;
+            color: #1f2937 !important;
+        }
+
+        .sweet-alert p {
+            font-family: var(--font-sans) !important;
+            font-weight: 400 !important;
+            color: #374151 !important;
+        }
+
+        /* Dark theme overrides */
+        .dark .sweet-alert {
+            background-color: #1f2937 !important;
+        }
+
+        .dark .sweet-alert h2 {
+            color: #f9fafb !important;
+        }
+
+        .dark .sweet-alert p {
+            color: #d1d5db !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-success::before,
+        .dark .sweet-alert .sa-icon.sa-success::after {
+            background-color: #1f2937 !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-success .sa-fix {
+            background-color: #1f2937 !important;
+        }
+
+        /* Button styles */
+        .sweet-alert button {
+            font-family: var(--font-sans) !important;
+            font-weight: 500 !important;
+            padding: 8px 20px !important;
+            border-radius: 6px !important;
+        }
     </style>
 </head>
 <body>
@@ -1274,23 +1353,45 @@ if ($result) {
                 window.location.href = 'editProduct.php?id=' + productId;
             };
 
-            // Delete product function
+            // Delete product function with SweetAlert confirmation
             window.deleteProduct = function(productId) {
-                if (confirm('Are you sure you want to delete this product?')) {
-                    // Create form and submit for deletion
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = 'allProduct.php';
-                    
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'delete_product';
-                    input.value = productId;
-                    
-                    form.appendChild(input);
-                    document.body.appendChild(form);
-                    form.submit();
-                }
+                swal({
+                    title: "Are you sure?",
+                    text: "This action cannot be undone. The product and its associated image will be permanently deleted.",
+                    type: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#dc2626",
+                    cancelButtonColor: "#6b7280",
+                    confirmButtonText: "Yes, delete it!",
+                    cancelButtonText: "Cancel",
+                    closeOnConfirm: false,
+                    closeOnCancel: true
+                }, function(isConfirm) {
+                    if (isConfirm) {
+                        // Show loading state
+                        swal({
+                            title: "Deleting...",
+                            text: "Please wait while we delete the product.",
+                            type: "info",
+                            showConfirmButton: false,
+                            allowOutsideClick: false
+                        });
+                        
+                        // Create form and submit for deletion
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = 'allProduct.php';
+                        
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'delete_product';
+                        input.value = productId;
+                        
+                        form.appendChild(input);
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                });
             };
 
         });

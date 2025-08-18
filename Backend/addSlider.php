@@ -13,7 +13,7 @@ $user_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin Use
 $user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email'] : '';
 
 // Database connection
-$link = mysqli_connect("localhost:3307", "root", "", "jaydeck");
+$link = mysqli_connect("localhost:4306", "root", "", "jaydeck");
 
 if (mysqli_connect_errno()) {
     echo "Failed to connect to MySQL: " . mysqli_connect_error();
@@ -82,6 +82,34 @@ if (isset($_POST['add_slider'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="../admin/assets/plugins/sweetalert/sweetalert.css" rel="stylesheet" />
+    <script src="../admin/assets/plugins/sweetalert/sweetalert.min.js"></script>
+
+    <?php if (!empty($message) && !empty($messageType)): ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                var messageText = <?php echo json_encode($message); ?>;
+                var messageType = <?php echo json_encode($messageType); ?>;
+                var messageTitle = messageType === 'success' ? 'Success!' : 'Error!';
+                
+                swal({
+                    title: messageTitle,
+                    text: messageText,
+                    type: messageType,
+                    confirmButtonText: "OK",
+                    confirmButtonColor: messageType === 'success' ? '#4f46e5' : '#dc2626',
+                    closeOnConfirm: true
+                }, function() {
+                    if (messageType === 'success') {
+                        // Redirect to all sliders page after successful addition
+                        window.location.href = 'Allslider.php';
+                    }
+                });
+            }, 100);
+        });
+    </script>
+    <?php endif; ?>
 
     <style>
         /* CSS Variables for Theming */
@@ -976,6 +1004,63 @@ if (isset($_POST['add_slider'])) {
         .dark .submenu-link:hover {
             background-color: rgba(255, 255, 255, 0.05);
         }
+
+        /* SweetAlert Theme Customization */
+        .sweet-alert {
+            font-family: var(--font-sans) !important;
+            border-radius: 8px !important;
+        }
+
+        .sweet-alert h2 {
+            font-family: var(--font-sans) !important;
+            font-weight: 600 !important;
+            color: #1f2937 !important;
+        }
+
+        .sweet-alert p {
+            font-family: var(--font-sans) !important;
+            font-weight: 400 !important;
+            color: #374151 !important;
+        }
+
+        /* Dark theme overrides */
+        .dark .sweet-alert {
+            background-color: #1f2937 !important;
+        }
+
+        .dark .sweet-alert h2 {
+            color: #f9fafb !important;
+        }
+
+        .dark .sweet-alert p {
+            color: #d1d5db !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-success .sa-placeholder {
+            border-color: #16a34a !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-success .sa-fix {
+            background-color: #16a34a !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-error .sa-x-mark {
+            background-color: #dc2626 !important;
+        }
+
+        .dark .sweet-alert .sa-icon.sa-warning {
+            border-color: #f59e0b !important;
+            color: #f59e0b !important;
+        }
+
+        .dark .sweet-alert .sa-button-container .cancel {
+            background-color: #6b7280 !important;
+            box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .dark .sweet-alert .sa-button-container .cancel:hover {
+            background-color: #4b5563 !important;
+        }
     </style>
 </head>
 <body>
@@ -1089,11 +1174,7 @@ if (isset($_POST['add_slider'])) {
                             </a>
                         </div>
                         
-                        <?php if ($message): ?>
-                            <div class="message <?php echo $messageType; ?>">
-                                <?php echo htmlspecialchars($message); ?>
-                            </div>
-                        <?php endif; ?>
+
                         
                         <form method="POST" enctype="multipart/form-data" class="slider-form">
                             <div class="form-group">
